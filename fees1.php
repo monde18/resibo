@@ -129,17 +129,9 @@ if ($result && $result->num_rows > 0) {
         .search-box {
             margin-bottom: 20px;
         }
-        .edit-confirm {
-            display: none;
-            margin-top: 15px;
-            padding: 15px;
-            background-color: #e3f2fd;
-            border-radius: 4px;
-        }
     </style>
 </head>
 <body>
-    
     <main>
         <div class="container">
             <h4 class="teal-text text-darken-2">Manage Fees</h4>
@@ -156,7 +148,7 @@ if ($result && $result->num_rows > 0) {
             <div class="card">
                 <div class="card-content">
                     <span class="card-title"><?= $edit_mode ? 'Edit Fee' : 'Add New Fee' ?></span>
-                    <form method="POST" id="feeForm">
+                    <form method="POST">
                         <div class="row">
                             <div class="input-field col s12 m6 l3">
                                 <input type="text" name="code" id="code" value="<?= $edit_mode ? htmlspecialchars($edit_fee['code']) : '' ?>">
@@ -178,36 +170,16 @@ if ($result && $result->num_rows > 0) {
                         
                         <?php if ($edit_mode): ?>
                             <input type="hidden" name="edit_id" value="<?= $edit_id ?>">
-                            
-                            <!-- Edit Confirmation Section -->
-                            <div class="edit-confirm" id="editConfirm">
-                                <h6>Confirm Changes</h6>
-                                <p>Are you sure you want to update this fee record?</p>
-                                <div>
-                                    <button type="submit" name="save_fee" class="btn teal waves-effect waves-light">
-                                        Confirm Update
-                                        <i class="material-icons right">check</i>
-                                    </button>
-                                    <a href="fees1.php" class="btn grey waves-effect waves-light">Cancel</a>
-                                </div>
-                            </div>
                         <?php endif; ?>
                         
                         <div class="card-action">
-                            <?php if ($edit_mode): ?>
-                                <button type="button" id="reviewChanges" class="btn teal waves-effect waves-light">
-                                    Review Changes
-                                    <i class="material-icons right">visibility</i>
-                                </button>
-                            <?php else: ?>
-                                <button type="submit" name="save_fee" class="btn teal waves-effect waves-light">
-                                    Add Fee
-                                    <i class="material-icons right">add</i>
-                                </button>
-                            <?php endif; ?>
+                            <button type="submit" name="save_fee" class="btn teal waves-effect waves-light">
+                                <?= $edit_mode ? 'Update Fee' : 'Add Fee' ?>
+                                <i class="material-icons right"><?= $edit_mode ? 'update' : 'add' ?></i>
+                            </button>
                             
                             <?php if ($edit_mode): ?>
-                                <a href="fees1.php" class="btn grey waves-effect waves-light">Cancel Edit</a>
+                                <a href="fees.php" class="btn grey waves-effect waves-light">Cancel</a>
                             <?php endif; ?>
                         </div>
                     </form>
@@ -336,31 +308,6 @@ if ($result && $result->num_rows > 0) {
                         var text = row.textContent.toLowerCase();
                         row.style.display = text.indexOf(filter) > -1 ? '' : 'none';
                     });
-                });
-            }
-            
-            // Edit confirmation functionality
-            var reviewButton = document.getElementById('reviewChanges');
-            if (reviewButton) {
-                reviewButton.addEventListener('click', function() {
-                    document.getElementById('editConfirm').style.display = 'block';
-                    this.style.display = 'none';
-                });
-            }
-            
-            // Form validation
-            var form = document.getElementById('feeForm');
-            if (form) {
-                form.addEventListener('submit', function(e) {
-                    var code = document.getElementById('code').value;
-                    var accountName = document.getElementById('account_name').value;
-                    var constantValue = document.getElementById('constant_value').value;
-                    var amount = document.getElementById('amount').value;
-                    
-                    if (!code && !accountName && !constantValue && !amount) {
-                        e.preventDefault();
-                        M.toast({html: 'At least one field must be filled', classes: 'red'});
-                    }
                 });
             }
         });

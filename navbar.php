@@ -1,35 +1,42 @@
 <?php
+
 $current_page = basename($_SERVER['PHP_SELF']);
+
+// fallback user info if session not set
+$user_first = $_SESSION['first_name'] ?? 'Guest';
+$user_last  = $_SESSION['last_name'] ?? '';
 ?>
 <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom shadow-sm">
   <div class="container">
     <a class="navbar-brand fw-bold" href="index.php">
-      <span class="material-icons me-1 text-primary">account_balance</span> Payment System
+        <img src="assests/logo.png" alt="Logo" style="height:52px; width:52px; margin-right:8px;">
+     E-RECEIPTS
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
       <span class="navbar-toggler-icon"></span>
     </button>
 
     <div class="collapse navbar-collapse" id="mainNav">
+      <!-- Left Nav -->
       <ul class="navbar-nav ms-auto nav-tabs">
-                <li class="nav-item">
+        <li class="nav-item">
           <a class="nav-link <?php if($current_page=='dashboard.php') echo 'active'; ?>" href="dashboard.php">
             <span class="material-icons">home</span> Home
           </a>
         </li>
-              <a class="nav-link <?php if($current_page=='index.php') echo 'active'; ?>" href="index.php">
+        <li class="nav-item">
+          <a class="nav-link <?php if($current_page=='index.php') echo 'active'; ?>" href="index.php">
             <span class="material-icons">add</span> New
           </a>
         </li>
-   
         <li class="nav-item">
           <a class="nav-link <?php if($current_page=='records.php') echo 'active'; ?>" href="records.php">
             <span class="material-icons">table_view</span> Records
           </a>
         </li>
-                <li class="nav-item">
+        <li class="nav-item">
           <a class="nav-link <?php if($current_page=='fees1.php') echo 'active'; ?>" href="fees1.php">
-            <span class="material-icons">table_view</span> Add fees
+            <span class="material-icons">paid</span> Fees
           </a>
         </li>
         <li class="nav-item">
@@ -42,13 +49,36 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <span class="material-icons">bar_chart</span> Reports
           </a>
         </li>
+        <li class="nav-item">
+          <a class="nav-link <?php if($current_page=='users.php') echo 'active'; ?>" href="users.php">
+            <span class="material-icons">group</span> Users
+          </a>
+        </li>
+      </ul>
+
+      <!-- Right User Dropdown -->
+      <ul class="navbar-nav ms-3">
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown"
+             role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center"
+                 style="width:35px; height:35px;">
+              <?= strtoupper(substr($user_first,0,1)) ?>
+            </div>
+            <span class="ms-2"><?= htmlspecialchars($user_first . ' ' . $user_last) ?></span>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+            <li><a class="dropdown-item" href="change_password.php">Change Password</a></li>
+            <li><a class="dropdown-item text-danger" href="logout.php">Logout</a></li>
+          </ul>
+        </li>
       </ul>
     </div>
   </div>
 </nav>
 
 <style>
-/* Bootstrap nav-tabs already gives the cut-out look */
+/* Retain your tab look */
 .nav-tabs .nav-link {
   border: none;
   border-top-left-radius: .5rem;
