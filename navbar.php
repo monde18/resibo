@@ -1,10 +1,14 @@
 <?php
+// Start session if not already started
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 $current_page = basename($_SERVER['PHP_SELF']);
 
-// fallback user info if session not set
+// Get user info from session
 $user_first = $_SESSION['first_name'] ?? 'Guest';
-$user_last  = $_SESSION['last_name'] ?? '';
+$user_last = $_SESSION['last_name'] ?? '';
 ?>
 <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom shadow-sm">
   <div class="container">
@@ -21,7 +25,7 @@ $user_last  = $_SESSION['last_name'] ?? '';
       <ul class="navbar-nav ms-auto nav-tabs">
         <li class="nav-item">
           <a class="nav-link <?php if($current_page=='dashboard.php') echo 'active'; ?>" href="dashboard.php">
-            <span class="material-icons">home</span> Home
+            <span class="material-icons">home</span> Dashboard
           </a>
         </li>
         <li class="nav-item">
@@ -36,7 +40,7 @@ $user_last  = $_SESSION['last_name'] ?? '';
         </li>
         <li class="nav-item">
           <a class="nav-link <?php if($current_page=='fees1.php') echo 'active'; ?>" href="fees1.php">
-            <span class="material-icons">paid</span> Fees
+            <span class="material-icons">money</span> Fees
           </a>
         </li>
         <li class="nav-item">

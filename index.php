@@ -113,50 +113,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $total = number_format($total, 2, '.', '');
 
                 // insert into payments (no const1..const8 anymore!)
-                $sql = "
-                    INSERT INTO payments
-                    (`date`, payee, reference_no,
-                     code1, account_name1, amount1,
-                     code2, account_name2, amount2,
-                     code3, account_name3, amount3,
-                     code4, account_name4, amount4,
-                     code5, account_name5, amount5,
-                     code6, account_name6, amount6,
-                     code7, account_name7, amount7,
-                     code8, account_name8, amount8,
-                     total, archived, archive_reason, archived_date
-                    ) VALUES (
-                     ?, ?, ?,
-                     ?, ?, ?,
-                     ?, ?, ?,
-                     ?, ?, ?,
-                     ?, ?, ?,
-                     ?, ?, ?,
-                     ?, ?, ?,
-                     ?, ?, ?,
-                     ?, ?, ?,
-                     ?, 0, NULL, NULL
-                    )
-                ";
+$sql = "
+    INSERT INTO payments
+    (`date`, payee, reference_no,
+     code1, account_name1, amount1,
+     code2, account_name2, amount2,
+     code3, account_name3, amount3,
+     code4, account_name4, amount4,
+     code5, account_name5, amount5,
+     code6, account_name6, amount6,
+     code7, account_name7, amount7,
+     code8, account_name8, amount8,
+     total, cash_received, change_amount,
+     archived, archive_reason, archived_date
+    ) VALUES (
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?, ?, ?, ?
+    )
+";
 
                 $stmt = $conn->prepare($sql);
                 if (!$stmt) {
                     $error = "Prepare failed: " . $conn->error;
                 } else {
-                    $types = "sss" . str_repeat("ssd", 8) . "d";
-                    $stmt->bind_param(
-                        $types,
-                        $date, $payee, $refno,
-                        $codesArr[0], $acctsArr[0], $amtsArr[0],
-                        $codesArr[1], $acctsArr[1], $amtsArr[1],
-                        $codesArr[2], $acctsArr[2], $amtsArr[2],
-                        $codesArr[3], $acctsArr[3], $amtsArr[3],
-                        $codesArr[4], $acctsArr[4], $amtsArr[4],
-                        $codesArr[5], $acctsArr[5], $amtsArr[5],
-                        $codesArr[6], $acctsArr[6], $amtsArr[6],
-                        $codesArr[7], $acctsArr[7], $amtsArr[7],
-                        $total
-                    );
+$cash_received = floatval($_POST['cash_received'] ?? 0);
+$change_amount = $cash_received - floatval($total);
+
+$archived = 0;
+$archive_reason = NULL;
+$archived_date = NULL;
+
+$types = "ssi" . str_repeat("ssd", 8) . "dddiss";
+
+$stmt->bind_param(
+    $types,
+    $date, $payee, $refno,
+    $codesArr[0], $acctsArr[0], $amtsArr[0],
+    $codesArr[1], $acctsArr[1], $amtsArr[1],
+    $codesArr[2], $acctsArr[2], $amtsArr[2],
+    $codesArr[3], $acctsArr[3], $amtsArr[3],
+    $codesArr[4], $acctsArr[4], $amtsArr[4],
+    $codesArr[5], $acctsArr[5], $amtsArr[5],
+    $codesArr[6], $acctsArr[6], $amtsArr[6],
+    $codesArr[7], $acctsArr[7], $amtsArr[7],
+    $total, $cash_received, $change_amount,
+    $archived, $archive_reason, $archived_date
+);
+
+
 
                     if ($stmt->execute()) {
                         // ✅ mark OR as used
@@ -303,21 +315,40 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
               <span class="material-icons">clear_all</span> Clear All
             </button>
           </div>
+          <hr>
+<div class="row mt-3">
+  <div class="col-md-6 small-muted">
+    Tip: Selecting a code auto-fills account & constant.  
+    If no constant is saved, you can type Const + Amount manually.  
+    If you pick "OTHER", you can enter all fields manually.
+  </div>
+  <div class="col-md-6">
+    <div class="mb-2 d-flex justify-content-end align-items-center gap-2">
+      <span class="text-muted">Total:</span>
+      <div class="input-group" style="max-width:180px;">
+        <span class="input-group-text">₱</span>
+        <input type="text" id="totalAmount" class="form-control text-end" readonly value="0.00">
+      </div>
+    </div>
+      <hr>
+    <div class="mb-2 d-flex justify-content-end align-items-center gap-2">
+      <span class="text-muted">Cash Received:</span>
+      <div class="input-group" style="max-width:180px;">
+        <span class="input-group-text">₱</span>
+        <input type="number" step="0.01" id="cashReceived" class="form-control text-end" name="cash_received" placeholder="0.00">
+      </div>
+    </div>
+    <hr>
+    <div class="d-flex justify-content-end align-items-center gap-2">
+      <span class="text-muted">Change:</span>
+      <div class="input-group" style="max-width:180px;">
+        <span class="input-group-text">₱</span>
+        <input type="text" id="changeAmount" class="form-control text-end" readonly value="0.00">
+      </div>
+    </div>
+  </div>
+</div>
 
-          <div class="row mt-3">
-            <div class="col-md-8 small-muted">
-              Tip: Selecting a code auto-fills account & constant.  
-              If no constant is saved, you can type Const + Amount manually.  
-              If you pick "OTHER", you can enter all fields manually.
-            </div>
-            <div class="col-md-4 d-flex justify-content-end align-items-center gap-2">
-              <span class="text-muted">Total:</span>
-              <div class="input-group" style="max-width:160px;">
-                <span class="input-group-text">₱</span>
-                <input type="text" id="totalAmount" class="form-control text-end" readonly value="0.00">
-              </div>
-            </div>
-          </div>
 <hr>
           <div class="mt-4 d-flex justify-content-end">
             <button type="submit" class="btn btn-success me-2"><span class="material-icons">save</span> Save</button>
@@ -383,7 +414,7 @@ function onCodeChange(event) {
     acct.classList.remove('readonly-bg');
 
     constv.value = '';
-    constv.readOnly = false;
+    constv.readOnly = true;
     constv.classList.remove('readonly-bg');
 
     amt.value = '';
@@ -518,6 +549,21 @@ document.addEventListener('DOMContentLoaded', function(){
 
   updateTotal();
 });
+function updateChange() {
+  const total = parseFloat(document.getElementById('totalAmount').value.replace(/,/g,'')) || 0;
+  const cash = parseFloat(document.getElementById('cashReceived').value) || 0;
+  const change = cash - total;
+  document.getElementById('changeAmount').value = fmt(change >= 0 ? change : 0);
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  // existing init...
+  const cashInput = document.getElementById('cashReceived');
+  if (cashInput) {
+    cashInput.addEventListener('input', updateChange);
+  }
+});
+
 </script>
 </body>
 </html>

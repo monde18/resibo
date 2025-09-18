@@ -1,6 +1,8 @@
 <?php
 include 'config.php';
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 $error = '';
 
@@ -11,8 +13,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($username === '' || $password === '') {
         $error = 'Username and password are required.';
     } else {
-        $stmt = $conn->prepare("SELECT id, username, password, role, or_start, or_end 
-                                FROM users WHERE username=? LIMIT 1");
+        // ✅ fetch first_name and last_name as well
+        $stmt = $conn->prepare("SELECT id, first_name, last_name, username, password, role, or_start, or_end 
+                        FROM users WHERE username=? LIMIT 1");
+
         $stmt->bind_param("s", $username);
         $stmt->execute();
         $res = $stmt->get_result();
@@ -21,13 +25,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($user) {
             if (password_verify($password, $user['password'])) {
-                // ✅ Success: set session variables
-                $_SESSION['user_id']   = (int)$user['id'];
-                $_SESSION['username']  = $user['username'];
-                $_SESSION['role']      = $user['role'];
-                $_SESSION['or_start']  = (int)$user['or_start'];
-                $_SESSION['or_end']    = (int)$user['or_end'];
+                // ✅ Save everything into session
+                $_SESSION['user_id']    = (int)$user['id'];
+                $_SESSION['username']   = $user['username'];
+                $_SESSION['role']       = $user['role'];
+                $_SESSION['or_start']   = (int)$user['or_start'];
+                $_SESSION['or_end']     = (int)$user['or_end'];
+                $_SESSION['first_name'] = $user['first_name'];
+                $_SESSION['last_name']  = $user['last_name'];
 
+                // Redirect to homepage
                 header("Location: index.php");
                 exit;
             } else {

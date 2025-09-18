@@ -1,5 +1,5 @@
 <?php
-// users.php — User Management with OR assignment + credentials + edit + overlap checks
+// users.php — User Management with OR tracking via payments table
 include 'config.php';
 session_start();
 
@@ -8,7 +8,7 @@ function sanitize($v) { return htmlspecialchars(trim($v)); }
 $error = '';
 $success = '';
 
-// Handle Create User
+// ------------------ Create User ------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
     $fname    = sanitize($_POST['fname'] ?? '');
     $lname    = sanitize($_POST['lname'] ?? '');
@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
     } elseif ($or_start > $or_end) {
         $error = "OR Start must be less than OR End.";
     } else {
-        // Check username uniqueness
+        // Username uniqueness
         $check = $conn->prepare("SELECT COUNT(*) FROM users WHERE username=?");
         $check->bind_param("s", $username);
         $check->execute();
@@ -32,9 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
         $check->close();
 
         if ($cnt > 0) {
-            $error = "⚠️ Username <strong>$username</strong> is already taken.";
+            $error = "⚠️ Username " . htmlspecialchars($username) . " is already taken.";
         } else {
-            // Check OR overlap
+            // OR overlap check
             $overlap = $conn->prepare("
                 SELECT username, or_start, or_end
                 FROM users
@@ -47,17 +47,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
             if ($result->num_rows > 0) {
                 $conflicts = [];
                 while ($c = $result->fetch_assoc()) {
-                    $conflicts[] = "{$c['username']} ({$c['or_start']}–{$c['or_end']})";
+                    $conflicts[] = htmlspecialchars($c['username']) . " (" . $c['or_start'] . "–" . $c['or_end'] . ")";
                 }
-                $error = "⚠️ OR range $or_start–$or_end overlaps with: <br>" . implode("<br>", $conflicts);
+                $error = "⚠️ OR range {$or_start}–{$or_end} overlaps with:<br>" . implode("<br>", $conflicts);
             } else {
+                // Insert user
                 $hash = password_hash($password, PASSWORD_DEFAULT);
                 $stmt = $conn->prepare("INSERT INTO users (first_name,last_name,username,password,role,or_start,or_end) VALUES (?,?,?,?,?,?,?)");
-                $stmt->bind_param("ssssiii", $fname,$lname,$username,$hash,$role,$or_start,$or_end);
+                $stmt->bind_param("ssssiii", $fname, $lname, $username, $hash, $role, $or_start, $or_end);
                 if ($stmt->execute()) {
-                    $success = "✅ User <strong>$username</strong> created successfully!";
+                    $success = "✅ User <strong>" . htmlspecialchars($username) . "</strong> created successfully!";
                 } else {
-                    $error = "Database error: ".$stmt->error;
+                    $error = "Database error: " . $stmt->error;
                 }
                 $stmt->close();
             }
@@ -66,9 +67,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
     }
 }
 
-// Handle Edit User
+// ------------------ Edit User ------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
-    $id       = intval($_POST['id']);
+    $id       = intval($_POST['id'] ?? 0);
     $fname    = sanitize($_POST['fname'] ?? '');
     $lname    = sanitize($_POST['lname'] ?? '');
     $role     = sanitize($_POST['role'] ?? '');
@@ -77,12 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
     $or_end   = intval($_POST['or_end'] ?? 0);
     $password = $_POST['password'] ?? '';
 
-    if (!$fname || !$lname || !$role || !$or_start || !$or_end || !$username) {
+    if (!$id || !$fname || !$lname || !$role || !$or_start || !$or_end || !$username) {
         $error = "All fields except password are required.";
     } elseif ($or_start > $or_end) {
         $error = "OR Start must be less than OR End.";
     } else {
-        // Check username uniqueness for other users
+        // Username uniqueness excluding current
         $check = $conn->prepare("SELECT COUNT(*) FROM users WHERE username=? AND id<>?");
         $check->bind_param("si", $username, $id);
         $check->execute();
@@ -91,9 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
         $check->close();
 
         if ($cnt > 0) {
-            $error = "⚠️ Username <strong>$username</strong> is already taken.";
+            $error = "⚠️ Username " . htmlspecialchars($username) . " is already taken.";
         } else {
-            // Check OR overlap with others
+            // Overlap check excluding current
             $overlap = $conn->prepare("
                 SELECT username, or_start, or_end
                 FROM users
@@ -106,22 +107,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
             if ($result->num_rows > 0) {
                 $conflicts = [];
                 while ($c = $result->fetch_assoc()) {
-                    $conflicts[] = "{$c['username']} ({$c['or_start']}–{$c['or_end']})";
+                    $conflicts[] = htmlspecialchars($c['username']) . " (" . $c['or_start'] . "–" . $c['or_end'] . ")";
                 }
-                $error = "⚠️ OR range $or_start–$or_end overlaps with: <br>" . implode("<br>", $conflicts);
+                $error = "⚠️ OR range {$or_start}–{$or_end} overlaps with:<br>" . implode("<br>", $conflicts);
             } else {
                 if ($password) {
                     $hash = password_hash($password, PASSWORD_DEFAULT);
-                    $stmt = $conn->prepare("UPDATE users SET first_name=?,last_name=?,username=?,password=?,role=?,or_start=?,or_end=? WHERE id=?");
-                    $stmt->bind_param("ssssiiii", $fname,$lname,$username,$hash,$role,$or_start,$or_end,$id);
+                    $stmt = $conn->prepare("UPDATE users SET first_name=?, last_name=?, username=?, password=?, role=?, or_start=?, or_end=? WHERE id=?");
+                    $stmt->bind_param("ssssiiii", $fname, $lname, $username, $hash, $role, $or_start, $or_end, $id);
                 } else {
-                    $stmt = $conn->prepare("UPDATE users SET first_name=?,last_name=?,username=?,role=?,or_start=?,or_end=? WHERE id=?");
-                    $stmt->bind_param("ssssiii", $fname,$lname,$username,$role,$or_start,$or_end,$id);
+                    $stmt = $conn->prepare("UPDATE users SET first_name=?, last_name=?, username=?, role=?, or_start=?, or_end=? WHERE id=?");
+                    $stmt->bind_param("sssssii", $fname, $lname, $username, $role, $or_start, $or_end, $id);
                 }
                 if ($stmt->execute()) {
-                    $success = "✅ User <strong>$username</strong> updated successfully!";
+                    $success = "✅ User <strong>" . htmlspecialchars($username) . "</strong> updated successfully!";
                 } else {
-                    $error = "Database error: ".$stmt->error;
+                    $error = "Database error: " . $stmt->error;
                 }
                 $stmt->close();
             }
@@ -130,21 +131,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
     }
 }
 
-// Fetch users
+// ------------------ Fetch users and calculate usage ------------------
 $users = [];
-$sql = "
-  SELECT u.*,
-         COUNT(o.id) AS total_or,
-         SUM(o.is_used=1) AS used_or,
-         MAX(CASE WHEN o.is_used=1 THEN o.or_number END) AS last_used
-  FROM users u
-  LEFT JOIN or_numbers o ON u.id = o.user_id
-  GROUP BY u.id
-  ORDER BY u.created_at DESC
-";
+$sql = "SELECT * FROM users ORDER BY created_at DESC";
 $res = $conn->query($sql);
 if ($res) {
     while ($row = $res->fetch_assoc()) {
+        $row['total_or'] = $row['or_end'] - $row['or_start'] + 1;
+
+        // Count used ORs
+        $q = $conn->prepare("SELECT COUNT(*) FROM payments WHERE reference_no BETWEEN ? AND ?");
+        $q->bind_param("ii", $row['or_start'], $row['or_end']);
+        $q->execute();
+        $q->bind_result($used);
+        $q->fetch();
+        $q->close();
+        $row['used_or'] = $used;
+
+        // Last OR used
+        $q = $conn->prepare("SELECT MAX(reference_no) FROM payments WHERE reference_no BETWEEN ? AND ?");
+        $q->bind_param("ii", $row['or_start'], $row['or_end']);
+        $q->execute();
+        $q->bind_result($last);
+        $q->fetch();
+        $q->close();
+        $row['last_used'] = $last;
+
+        // Next available
+        $row['next_available'] = null;
+        for ($i = $row['or_start']; $i <= $row['or_end']; $i++) {
+            $q = $conn->prepare("SELECT COUNT(*) FROM payments WHERE reference_no=?");
+            $q->bind_param("i", $i);
+            $q->execute();
+            $q->bind_result($cnt);
+            $q->fetch();
+            $q->close();
+            if ($cnt == 0) {
+                $row['next_available'] = $i;
+                break;
+            }
+        }
+
         $users[] = $row;
     }
 }
@@ -162,6 +189,7 @@ if ($res) {
     .card { border-radius: 12px; box-shadow: 0 6px 18px rgba(16,24,40,0.06); }
     .accent { color: #0ea5a4; }
     .progress { height: 6px; border-radius: 4px; }
+    .small-muted { font-size:.85rem; color:#6b7280; }
   </style>
 </head>
 <body>
@@ -172,23 +200,29 @@ if ($res) {
   <?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
 
   <div class="row justify-content-center">
-    <div class="col-lg-10">
+    <div class="col-lg-11">
 
       <!-- Create User -->
       <div class="card p-4 mb-4">
-        <h4>Create User</h4>
+        <div class="d-flex align-items-center mb-3">
+          <span class="material-icons bg-light rounded-circle p-2 me-3 accent">person_add</span>
+          <h4 class="mb-0">Create User</h4>
+        </div>
+
         <form method="post">
           <input type="hidden" name="create_user" value="1">
           <div class="row g-3 mb-3">
             <div class="col-md-6"><input type="text" name="fname" class="form-control" placeholder="First Name" required></div>
             <div class="col-md-6"><input type="text" name="lname" class="form-control" placeholder="Last Name" required></div>
           </div>
+
           <div class="row g-3 mb-3">
             <div class="col-md-6"><input type="text" name="username" class="form-control" placeholder="Username" required></div>
             <div class="col-md-6"><input type="password" name="password" class="form-control" placeholder="Password" required></div>
           </div>
+
           <div class="row g-3 mb-3">
-            <div class="col-md-6">
+            <div class="col-md-4">
               <select name="role" class="form-select" required>
                 <option value="">-- Select Role --</option>
                 <option value="Admin">Admin</option>
@@ -196,78 +230,96 @@ if ($res) {
                 <option value="Encoder">Encoder</option>
               </select>
             </div>
-            <div class="col-md-3"><input type="number" name="or_start" class="form-control" placeholder="OR Start" required></div>
-            <div class="col-md-3"><input type="number" name="or_end" class="form-control" placeholder="OR End" required></div>
+            <div class="col-md-4"><input type="number" name="or_start" class="form-control" placeholder="OR Start" required></div>
+            <div class="col-md-4"><input type="number" name="or_end" class="form-control" placeholder="OR End" required></div>
           </div>
-          <button type="submit" class="btn btn-success">Save</button>
+
+          <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-success"><span class="material-icons">save</span> Save</button>
+          </div>
         </form>
       </div>
 
       <!-- Users Table -->
       <div class="card p-4">
-        <h5>User List</h5>
+        <h5 class="mb-3">User List</h5>
         <div class="table-responsive">
           <table class="table align-middle">
             <thead class="table-light">
               <tr>
                 <th>#</th><th>Name</th><th>Username</th><th>Role</th><th>OR Range</th>
-                <th>Usage</th><th>Last OR Used</th><th>Created</th><th>Actions</th>
+                <th style="width:240px;">Usage</th><th>Next Available</th><th>Last OR Used</th><th>Created</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
             <?php if (!$users): ?>
-              <tr><td colspan="9" class="text-center text-muted">No users yet.</td></tr>
-            <?php else: foreach ($users as $u):
-              $left = $u['total_or'] - $u['used_or'];
-              $pct = $u['total_or'] > 0 ? round(($u['used_or']/$u['total_or'])*100) : 0;
+              <tr><td colspan="10" class="text-center small-muted">No users yet.</td></tr>
+            <?php else: ?>
+              <?php foreach ($users as $u):
+                $used  = $u['used_or'];
+                $total = $u['total_or'];
+                $left  = $total - $used;
+                $pct   = $total > 0 ? round(($used / $total) * 100) : 0;
 
-              $conflicts = [];
-              foreach ($users as $other) {
-                if ($u['id'] != $other['id']) {
-                  if (!($u['or_end'] < $other['or_start'] || $u['or_start'] > $other['or_end'])) {
-                    $conflicts[] = $other['username']." (".$other['or_start']."–".$other['or_end'].")";
-                  }
+                // detect overlap visually
+                $conflicts = [];
+                foreach ($users as $other) {
+                    if ($u['id'] != $other['id']) {
+                        if (!($u['or_end'] < $other['or_start'] || $u['or_start'] > $other['or_end'])) {
+                            $conflicts[] = htmlspecialchars($other['username']) . " (" . $other['or_start'] . "–" . $other['or_end'] . ")";
+                        }
+                    }
                 }
-              }
-            ?>
-              <tr class="<?= $conflicts ? 'table-danger' : '' ?>">
+                $hasConflict = count($conflicts) > 0;
+              ?>
+              <tr class="<?= $hasConflict ? 'table-danger' : '' ?>">
                 <td><?= $u['id'] ?></td>
-                <td><?= $u['first_name']." ".$u['last_name'] ?></td>
-                <td><?= $u['username'] ?></td>
-                <td><?= $u['role'] ?></td>
+                <td><?= htmlspecialchars($u['first_name'] . ' ' . $u['last_name']) ?></td>
+                <td><?= htmlspecialchars($u['username']) ?></td>
+                <td><?= htmlspecialchars($u['role']) ?></td>
                 <td>
-                  <?= str_pad($u['or_start'],5,'0',STR_PAD_LEFT) ?>–
-                  <?= str_pad($u['or_end'],5,'0',STR_PAD_LEFT) ?>
-                  <?php if ($conflicts): ?>
+                  <?= str_pad($u['or_start'],5,'0',STR_PAD_LEFT) ?> – <?= str_pad($u['or_end'],5,'0',STR_PAD_LEFT) ?>
+                  <?php if ($hasConflict): ?>
                     <br><span class="badge bg-danger" data-bs-toggle="tooltip" title="<?= implode(', ', $conflicts) ?>">⚠ Overlap</span>
                   <?php endif; ?>
                 </td>
                 <td>
-                  <div><?= $u['used_or'] ?> used / <?= $left ?> left</div>
-                  <div class="progress"><div class="progress-bar bg-success" style="width:<?= $pct ?>%"></div></div>
+                  <div class="small mb-1"><strong><?= $used ?></strong> used / <strong><?= $left ?></strong> left</div>
+                  <div class="progress"><div class="progress-bar bg-success" style="width: <?= $pct ?>%"></div></div>
                 </td>
-                <td><?= $u['last_used'] ? str_pad($u['last_used'],5,'0',STR_PAD_LEFT) : '-' ?></td>
-                <td><?= $u['created_at'] ?></td>
                 <td>
-                  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal<?= $u['id'] ?>">Edit</button>
+                  <?php if ($u['next_available']): ?>
+                    <?= str_pad($u['next_available'],5,'0',STR_PAD_LEFT) ?>
+                  <?php else: ?>
+                    <span class="small-muted">N/A</span>
+                  <?php endif; ?>
                 </td>
+                <td>
+                  <?php if ($u['last_used']): ?>
+                    <?= str_pad($u['last_used'],5,'0',STR_PAD_LEFT) ?>
+                  <?php else: ?>
+                    <span class="small-muted">None yet</span>
+                  <?php endif; ?>
+                </td>
+                <td><?= htmlspecialchars($u['created_at']) ?></td>
+                <td><button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal<?= $u['id'] ?>">Edit</button></td>
               </tr>
 
               <!-- Edit Modal -->
-              <div class="modal fade" id="editModal<?= $u['id'] ?>" tabindex="-1">
+              <div class="modal fade" id="editModal<?= $u['id'] ?>" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog">
                   <div class="modal-content">
                     <form method="post">
                       <input type="hidden" name="edit_user" value="1">
                       <input type="hidden" name="id" value="<?= $u['id'] ?>">
                       <div class="modal-header">
-                        <h5 class="modal-title">Edit User</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        <h5 class="modal-title">Edit User — <?= htmlspecialchars($u['username']) ?></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                       </div>
                       <div class="modal-body">
-                        <div class="mb-2"><input type="text" name="fname" value="<?= $u['first_name'] ?>" class="form-control" placeholder="First Name" required></div>
-                        <div class="mb-2"><input type="text" name="lname" value="<?= $u['last_name'] ?>" class="form-control" placeholder="Last Name" required></div>
-                        <div class="mb-2"><input type="text" name="username" value="<?= $u['username'] ?>" class="form-control" required></div>
+                        <div class="mb-2"><input type="text" name="fname" class="form-control" value="<?= htmlspecialchars($u['first_name']) ?>" required></div>
+                        <div class="mb-2"><input type="text" name="lname" class="form-control" value="<?= htmlspecialchars($u['last_name']) ?>" required></div>
+                        <div class="mb-2"><input type="text" name="username" class="form-control" value="<?= htmlspecialchars($u['username']) ?>" required></div>
                         <div class="mb-2"><input type="password" name="password" class="form-control" placeholder="Leave blank to keep password"></div>
                         <div class="mb-2">
                           <select name="role" class="form-select" required>
@@ -277,19 +329,17 @@ if ($res) {
                           </select>
                         </div>
                         <div class="row g-2">
-                          <div class="col-md-6"><input type="number" name="or_start" value="<?= $u['or_start'] ?>" class="form-control" required></div>
-                          <div class="col-md-6"><input type="number" name="or_end" value="<?= $u['or_end'] ?>" class="form-control" required></div>
+                          <div class="col-md-6"><input type="number" name="or_start" class="form-control" value="<?= $u['or_start'] ?>" required></div>
+                          <div class="col-md-6"><input type="number" name="or_end" class="form-control" value="<?= $u['or_end'] ?>" required></div>
                         </div>
                       </div>
-                      <div class="modal-footer">
-                        <button type="submit" class="btn btn-primary">Save Changes</button>
-                      </div>
+                      <div class="modal-footer"><button type="submit" class="btn btn-primary">Save Changes</button></div>
                     </form>
                   </div>
                 </div>
               </div>
-
-            <?php endforeach; endif; ?>
+              <?php endforeach; ?>
+            <?php endif; ?>
             </tbody>
           </table>
         </div>
@@ -302,8 +352,8 @@ if ($res) {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-  tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el) })
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
 });
 </script>
 </body>
