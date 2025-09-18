@@ -10,6 +10,43 @@ $error = '';
 $warning = '';
 $saved_total = 0;
 
+$or_start = $or_end = $last_used = $next_available = null;
+
+$uid = $_SESSION['user_id'] ?? null;
+if ($uid) {
+    // get range
+    $stmt = $conn->prepare("SELECT or_start, or_end FROM users WHERE id=?");
+    $stmt->bind_param("i", $uid);
+    $stmt->execute();
+    $stmt->bind_result($or_start, $or_end);
+    $stmt->fetch();
+    $stmt->close();
+
+    // get last OR used from payments
+    $stmt2 = $conn->prepare("SELECT MAX(reference_no) FROM payments WHERE reference_no BETWEEN ? AND ?");
+    $stmt2->bind_param("ii", $or_start, $or_end);
+    $stmt2->execute();
+    $stmt2->bind_result($last_used);
+    $stmt2->fetch();
+    $stmt2->close();
+
+    if (!$last_used) {
+        $last_used = null;
+    }
+
+// // get next available OR
+// if ($last_used) {
+//     $next_available = $last_used + 1;
+//     if ($next_available > $or_end) {
+//         $next_available = null; // no more OR left
+//     }
+// } else {
+//     $next_available = $or_start; // first OR if none used yet
+// }}
+
+}
+
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $date  = sanitize($_POST['date'] ?? '');
     $payee = sanitize($_POST['payee'] ?? '');
@@ -24,7 +61,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Date, Payee and Reference No. are required.";
     } else {
         // 🔐 check if refno belongs to current user
-        $uid = $_SESSION['user_id'] ?? null;
         if (!$uid) {
             $error = "You must be logged in.";
         } else {
@@ -112,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $total = number_format($total, 2, '.', '');
 
-                // insert into payments (no const1..const8 anymore!)
+                // insert into payments
 $sql = "
     INSERT INTO payments
     (`date`, payee, reference_no,
@@ -167,8 +203,6 @@ $stmt->bind_param(
     $total, $cash_received, $change_amount,
     $archived, $archive_reason, $archived_date
 );
-
-
 
                     if ($stmt->execute()) {
                         // ✅ mark OR as used
@@ -252,7 +286,22 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
             <h4 class="mb-0">Payments Entry (E-RECEIPT)</h4>
           </div>
         </div>
-
+ <?php if ($uid): ?>
+          <div class="alert alert-info d-flex justify-content-between">
+            <div>
+              <strong>|  OR Range:
+              <?= str_pad($or_start, 5, '0', STR_PAD_LEFT) ?> – <?= str_pad($or_end, 5, '0', STR_PAD_LEFT) ?></strong>
+            </div>
+            <div>
+              <strong>Last OR Used:
+              <?= $last_used ? str_pad($last_used, 5, '0', STR_PAD_LEFT) : "None yet" ?></strong>
+            </div>
+            <div>
+              <strong>|</strong>
+              <?= $next_available ? str_pad($next_available, 5, '0', STR_PAD_LEFT) : "" ?>
+            </div>
+          </div>
+        <?php endif; ?>
         <form id="paymentsForm" method="post" class="needs-validation" novalidate>
           <div class="row g-3 mb-3">
             <div class="col-md-3">
@@ -268,7 +317,7 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
     type="text" 
     class="form-control" 
     placeholder="Payee name" 
-    value="<?= isset($_POST['payee']) ? sanitize($_POST['payee']) : '' ?>"
+    value="<?= isset($_POST['payee']) ? sanitize($_POST['payee']) : '' ?>" auto-complete="off"
   >
 </div>
             <div class="col-md-4">
@@ -306,10 +355,10 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
               </div>
               <div class="col-md-1 d-flex gap-1">
                 <button type="button" class="btn btn-outline-danger btn-sm remove-row" title="Remove Row">
-                  <span class="material-icons">delete</span>
+                  <span class="material-icons">remove</span>
                 </button>
                 <button type="button" class="btn btn-outline-secondary btn-sm reset-row" title="Clear Row">
-                  <span class="material-icons">refresh</span>
+                  <span class="material-icons">sync</span>
                 </button>
               </div>
             </div>
@@ -332,18 +381,18 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
   </div>
   <div class="col-md-6">
     <div class="mb-2 d-flex justify-content-end align-items-center gap-2">
-      <span class="text-muted">Total:</span>
+      <strong><span class="text-muted" style="color:red;">Total:</span></strong>
       <div class="input-group" style="max-width:180px;">
         <span class="input-group-text">₱</span>
-        <input type="text" id="totalAmount" class="form-control text-end" readonly value="0.00">
+        <input type="text" id="totalAmount" class="form-control text-end" readonly value="0.00" style="color:red;font-weight:bold;">
       </div>
     </div>
       <hr>
     <div class="mb-2 d-flex justify-content-end align-items-center gap-2">
-      <span class="text-muted">Cash Received:</span>
+     <strong style="color:blue;"> <span class="text-muted" >Cash Received:</span></strong>
       <div class="input-group" style="max-width:180px;">
         <span class="input-group-text">₱</span>
-        <input type="number" step="0.01" id="cashReceived" class="form-control text-end" name="cash_received" placeholder="0.00">
+        <input type="number" step="0.01" id="cashReceived" class="form-control text-end" name="cash_received" placeholder="0.00" style="color:blue;font-weight:bold;" >
       </div>
     </div>
     <hr>
@@ -351,7 +400,7 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
       <span class="text-muted">Change:</span>
       <div class="input-group" style="max-width:180px;">
         <span class="input-group-text">₱</span>
-        <input type="text" id="changeAmount" class="form-control text-end" readonly value="0.00">
+        <input type="text" id="changeAmount" class="form-control text-end" readonly value="0.00" style="font-weight:bold;">
       </div>
     </div>
   </div>
@@ -359,7 +408,7 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
 
 <hr>
           <div class="mt-4 d-flex justify-content-end">
-            <button type="submit" class="btn btn-success me-2"><span class="material-icons">save</span> Save</button>
+            <button type="submit" class="btn btn-success me-2"><span class="material-icons">add_circle</span> Save</button>
           </div>
         </form>
 

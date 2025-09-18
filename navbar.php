@@ -71,8 +71,10 @@ $user_last = $_SESSION['last_name'] ?? '';
             </div>
             <span class="ms-2"><?= htmlspecialchars($user_first . ' ' . $user_last) ?></span>
           </a>
+           
           <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
             <li><a class="dropdown-item" href="change_password.php">Change Password</a></li>
+            <hr>
             <li><a class="dropdown-item text-danger" href="logout.php">Logout</a></li>
           </ul>
         </li>
