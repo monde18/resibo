@@ -47,7 +47,7 @@
   </style>
 </head>
 <body>
-  <?php if (isset($_GET['status'])): ?>
+<?php if (isset($_GET['status'])): ?>
 <div class="position-fixed top-0 end-0 p-3" style="z-index: 9999">
   <div class="toast align-items-center text-white bg-<?= $_GET['status']==='success'?'success':'danger' ?> border-0 show" role="alert">
     <div class="d-flex">
@@ -66,7 +66,6 @@
   <div class="card p-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h4><span class="material-icons">table_view</span> Payment Records</h4>
-
     </div>
 
     <!-- Filters -->
@@ -107,12 +106,14 @@
             <th>Reference No.</th>
             <th>Payments</th>
             <th>Total</th>
+            <th>Cash Received</th>
+            <th>Change</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
         <?php
-        $result = $conn->query("SELECT * FROM payments WHERE archived = 0 OR archived IS NULL ORDER BY date DESC");
+        $result = $conn->query("SELECT * FROM payments WHERE archived = 0 OR archived IS NULL ORDER BY date ASC");
         while ($row = $result->fetch_assoc()):
           $payments = [];
           for ($i=1; $i<=8; $i++) {
@@ -128,6 +129,8 @@
           <td><?= htmlspecialchars($row['reference_no']) ?></td>
           <td><?= implode("<br>", $payments) ?></td>
           <td><strong>₱<?= number_format($row['total'],2) ?></strong></td>
+          <td><span class="text-success">₱<?= number_format($row['cash_received'],2) ?></span></td>
+          <td><span class="text-danger">₱<?= number_format($row['change_amount'],2) ?></span></td>
           <td>
             <div class="action-buttons">
               <a href="edit.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-warning btn-icon"><span class="material-icons">edit</span></a>
@@ -174,25 +177,59 @@
 
 <!-- Print Modal -->
 <div class="modal fade" id="printModal" tabindex="-1">
-  <div class="modal-dialog"><div class="modal-content">
-    <div class="modal-header"><h5 class="modal-title">Print Receipt</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Print Receipt</h5>
+      <button class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
     <div class="modal-body">
       <p>Confirm details for printing the receipt.</p>
+
       <div class="mb-3">
         <label class="form-label">Payor</label>
-        <input type="text" class="form-control" id="printPayor" placeholder="Enter payor name">
+        <input type="text" class="form-control" id="printPayor" readonly>
       </div>
+
       <div class="mb-3">
-        <label class="form-label">Nature of Collection</label>
-        <input type="text" class="form-control" id="printNature" placeholder="Enter nature of collection">
-      </div>
-      <div class="mb-3">
-        <label class="form-label">Payment Method</label>
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="receivedCash" name="received[]" value="Cash">
-          <label class="form-check-label" for="receivedCash">Cash</label>
+        <label class="form-label">Payments</label>
+        <div class="table-responsive">
+          <table class="table table-bordered" id="printPaymentsTable">
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Account</th>
+                <th>Amount (₱)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
         </div>
       </div>
+
+      <div class="row">
+        <div class="col-md-6">
+          <label class="form-label">Total</label>
+          <input type="text" class="form-control" id="printTotal" readonly>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Cash Received</label>
+          <input type="text" class="form-control" id="printCashReceived" readonly>
+        </div>
+      </div>
+
+      <div class="row mt-2">
+        <div class="col-md-6">
+          <label class="form-label">Change</label>
+          <input type="text" class="form-control" id="printChange" readonly>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Payment Method</label>
+          <input type="text" class="form-control" value="Cash" readonly>
+        </div>
+      </div>
+
       <input type="hidden" id="printRecordId">
     </div>
     <div class="modal-footer">
@@ -230,10 +267,12 @@ $(function(){
     responsive:true,
     dom:'Bfrtip',
     buttons:[
-      { extend:'print', text:'<span class="material-icons">print</span> Print All', className:'btn btn-info', exportOptions:{ columns:[0,1,2,3,4] } },
-      'excel','pdf','colvis'
+      { extend:'print', text:'<span class="material-icons">print</span> Print All', className:'btn btn-info', exportOptions:{ columns:[0,1,2,3,4,5,6] } },
+      { extend:'excel', exportOptions:{ columns:[0,1,2,3,4,5,6] } },
+      { extend:'pdf', exportOptions:{ columns:[0,1,2,3,4,5,6] } },
+      'colvis'
     ],
-    order:[[0,'desc']], columnDefs:[{ orderable:false, targets:5 }]
+    order:[[0,'desc']], columnDefs:[{ orderable:false, targets:7 }]
   });
 
   // Archive modal logic
@@ -251,54 +290,60 @@ $(function(){
   };
 
   // Print modal logic
-  window.openPrintModal=function(id){
-    $('#printRecordId').val(id);
-    const row = table.row($('tr[data-id="'+id+'"]')).data();
-    $('#printPayor').val(row[1]); // Payee column (index 1)
-    $('#printNature').val(row[3].split('<br>')[0].replace(/<\/?[^>]+(>|$)/g, "").split(' - ')[1] || ''); // First payment nature
-    $('#receivedCash').prop('checked', false);
-    $('#printModal').modal('show');
-  };
-  window.printRecord=function(){
-    const id=$('#printRecordId').val();
-    const payor=$('#printPayor').val();
-    const nature=$('#printNature').val();
-    const received=$('#receivedCash').is(':checked') ? ['Cash'] : [];
+// Open Print Modal and fetch record details
+window.openPrintModal=function(id){
+  $('#printRecordId').val(id);
 
-    let form=document.createElement("form");
-    form.method="POST";
-    form.action="receipt.php";
-    form.target="_blank";
+  // Clear table first
+  $('#printPaymentsTable tbody').empty();
 
-    let inputId=document.createElement("input");
-    inputId.type="hidden";
-    inputId.name="id";
-    inputId.value=id;
-    form.appendChild(inputId);
+  $.post('get_record.php', {id:id}, function(res){
+    if(res.success){
+      $('#printPayor').val(res.data.payee);
+      $('#printTotal').val("₱ " + parseFloat(res.data.total).toFixed(2));
+      $('#printCashReceived').val("₱ " + parseFloat(res.data.cash_received).toFixed(2));
+      $('#printChange').val("₱ " + parseFloat(res.data.change_amount).toFixed(2));
 
-    let inputPayor=document.createElement("input");
-    inputPayor.type="hidden";
-    inputPayor.name="payee";
-    inputPayor.value=payor;
-    form.appendChild(inputPayor);
+      // Populate payments table
+      res.data.payments.forEach(function(p){
+        $('#printPaymentsTable tbody').append(`
+          <tr>
+            <td>${p.code}</td>
+            <td>${p.account}</td>
+            <td class="text-end">₱ ${parseFloat(p.amount).toFixed(2)}</td>
+          </tr>
+        `);
+      });
 
-    let inputNature=document.createElement("input");
-    inputNature.type="hidden";
-    inputNature.name="account_name1";
-    inputNature.value=nature;
-    form.appendChild(inputNature);
+      $('#printModal').modal('show');
+    } else {
+      alert("Error fetching record: " + res.message);
+    }
+  },'json');
+};
+// Print Record
+window.printRecord=function(){
+  const id=$('#printRecordId').val();
 
-    let inputReceived=document.createElement("input");
-    inputReceived.type="hidden";
-    inputReceived.name="received[]";
-    inputReceived.value=received[0] || '';
-    form.appendChild(inputReceived);
+  let form=document.createElement("form");
+  form.method="POST";
+  form.action="receipt.php";
+  form.target="_blank";
 
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
-    $('#printModal').modal('hide');
-  };
+  let inputId=document.createElement("input");
+  inputId.type="hidden";
+  inputId.name="id";
+  inputId.value=id;
+  form.appendChild(inputId);
+
+  document.body.appendChild(form);
+  form.submit();
+  document.body.removeChild(form);
+
+  $('#printModal').modal('hide');
+};
+
+
 
   // Dropdown filters
   table.column(1).data().unique().sort().each(d=>$('#payeeFilter').append(`<option value="${d}">${d}</option>`));

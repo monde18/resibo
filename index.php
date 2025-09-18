@@ -259,10 +259,18 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
               <label class="form-label">Date</label>
               <input required name="date" type="date" class="form-control" value="<?= isset($_POST['date']) ? sanitize($_POST['date']) : date('Y-m-d') ?>">
             </div>
-            <div class="col-md-5">
-              <label class="form-label">Payee</label>
-              <input required name="payee" type="text" class="form-control" placeholder="Payee name" value="<?= isset($_POST['payee']) ? sanitize($_POST['payee']) : '' ?>">
-            </div>
+           <div class="col-md-5">
+  <label class="form-label">Payee</label>
+  <input 
+    required 
+    name="payee" 
+    id="payee"
+    type="text" 
+    class="form-control" 
+    placeholder="Payee name" 
+    value="<?= isset($_POST['payee']) ? sanitize($_POST['payee']) : '' ?>"
+  >
+</div>
             <div class="col-md-4">
               <label class="form-label">OR No.</label>
               <input required name="refno" type="number" class="form-control" placeholder="Reference / OR / TR #" value="<?= isset($_POST['refno']) ? sanitize($_POST['refno']) : '' ?>">
@@ -409,12 +417,13 @@ function onCodeChange(event) {
   const amt = row.querySelector('.amount');
 
   if (sel.value === "OTHER") {
+    // Manual entry → everything editable
     acct.value = '';
     acct.readOnly = false;
     acct.classList.remove('readonly-bg');
 
     constv.value = '';
-    constv.readOnly = true;
+    constv.readOnly = false;   // ✅ now editable
     constv.classList.remove('readonly-bg');
 
     amt.value = '';
@@ -425,6 +434,7 @@ function onCodeChange(event) {
     acct.classList.add('readonly-bg');
 
     if (codesData[sel.value].const && codesData[sel.value].const.trim() !== "") {
+      // Has constant + amount → lock both
       constv.value = codesData[sel.value].const;
       constv.readOnly = true;
       constv.classList.add('readonly-bg');
@@ -432,9 +442,10 @@ function onCodeChange(event) {
       amt.value = codesData[sel.value].value || '';
       amt.readOnly = true;
     } else {
+      // No constant/amount → constant locked, amount editable
       constv.value = '';
-      constv.readOnly = false;
-      constv.classList.remove('readonly-bg');
+      constv.readOnly = true;   // ✅ always locked for predefined codes
+      constv.classList.add('readonly-bg');
 
       amt.value = '';
       amt.readOnly = false;
@@ -453,6 +464,7 @@ function onCodeChange(event) {
   }
   updateTotal();
 }
+
 
 function clearRowFromButton(btn) {
   const row = btn.closest('.payment-row');
