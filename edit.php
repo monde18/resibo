@@ -28,6 +28,13 @@ $row = $result->fetch_assoc();
 <body>
 <div class="container py-4">
   <?php include 'navbar.php'; ?>
+  <?php if (isset($_GET['updated']) && $_GET['updated'] == 1): ?>
+  <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+    ✅ Payment record updated successfully!
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+<?php endif; ?>
+
   
   <div class="card">
     <div class="p-4 bg-primary text-white rounded-top">
@@ -82,13 +89,17 @@ $row = $result->fetch_assoc();
               <label class="form-label">Code</label>
               <select name="code[]" class="form-select code-select">
                 <option value="">-- Select --</option>
-                <?php foreach ($fees as $fcode => $fee): ?>
-                  <option value="<?= $fcode ?>"
-                    data-name="<?= htmlspecialchars($fee['name']) ?>"
-                    data-const="<?= htmlspecialchars($fee['const']) ?>"
-                    data-amount="<?= htmlspecialchars($fee['value']) ?>"
+                <?php foreach ($fees as $fcode => $fee): 
+                    $fname  = htmlspecialchars($fee['name']  ?? '');
+                    $fconst = htmlspecialchars($fee['const'] ?? '');
+                    $fvalue = htmlspecialchars($fee['value'] ?? '');
+                ?>
+                  <option value="<?= htmlspecialchars($fcode) ?>"
+                    data-name="<?= $fname ?>"
+                    data-const="<?= $fconst ?>"
+                    data-amount="<?= $fvalue ?>"
                     <?= ($code==$fcode?'selected':'') ?>>
-                    <?= $fcode ?> — <?= $fee['name'] ?>
+                    <?= htmlspecialchars($fcode) ?> — <?= $fname ?>
                   </option>
                 <?php endforeach; ?>
                 <option value="OTHER" <?= ($code=="OTHER"?'selected':'') ?>>OTHER — Manual Entry</option>
@@ -122,8 +133,10 @@ $row = $result->fetch_assoc();
               <label class="form-label">Code</label>
               <select name="code[]" class="form-select code-select">
                 <option value="">-- Select --</option>
-                <?php foreach ($fees as $fcode => $fee): ?>
-                  <option value="<?= $fcode ?>"><?= $fcode ?> — <?= $fee['name'] ?></option>
+                <?php foreach ($fees as $fcode => $fee): 
+                    $fname  = htmlspecialchars($fee['name']  ?? '');
+                ?>
+                  <option value="<?= htmlspecialchars($fcode) ?>"><?= htmlspecialchars($fcode) ?> — <?= $fname ?></option>
                 <?php endforeach; ?>
                 <option value="OTHER">OTHER — Manual Entry</option>
               </select>
@@ -160,6 +173,34 @@ $row = $result->fetch_assoc();
             <div class="p-3 bg-light rounded">
               <strong>Total:</strong> ₱<span id="totalAmount"><?= number_format($row['total'],2) ?></span>
             </div>
+            <!-- Cash Received & Change -->
+<div class="row mt-3">
+  <div class="col-md-6">
+    <label class="form-label">Cash Received</label>
+    <div class="input-group">
+      <span class="input-group-text">₱</span>
+      <input type="number" step="0.01" 
+             name="cash_received" 
+             id="cashReceived" 
+             value="<?= htmlspecialchars($row['cash_received']) ?>" 
+             class="form-control text-end" 
+             style="color:blue;font-weight:bold;">
+    </div>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">Change</label>
+    <div class="input-group">
+      <span class="input-group-text">₱</span>
+      <input type="text" 
+             name="change_amount" 
+             id="changeAmount" 
+             value="<?= htmlspecialchars($row['change_amount']) ?>" 
+             class="form-control text-end" 
+             style="font-weight:bold;" readonly>
+    </div>
+  </div>
+</div>
+
           </div>
           <div class="col-md-6 text-end">
             <button type="submit" class="btn btn-success btn-lg">
@@ -173,87 +214,193 @@ $row = $result->fetch_assoc();
   </div>
 </div>
 
+
+<?php if (isset($_GET['updated']) && $_GET['updated'] == 1): ?>
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="updateToast" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body">
+        ✅ Payment record updated successfully!
+      </div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+<script>
+  const toastEl = document.getElementById('updateToast');
+  if (toastEl) {
+    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+    toast.show();
+  }
+</script>
+<?php endif; ?>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script>
-const fees = <?= json_encode($fees) ?>;
+<?php
+// build JS data same as index.php
+$fees = [];
+$result = $conn->query("SELECT code, account_name, constant_value, amount FROM fees");
+if ($result && $result->num_rows > 0) {
+    while ($rowf = $result->fetch_assoc()) {
+        $fees[$rowf['code']] = [
+            "name" => $rowf['account_name'],
+            "const" => $rowf['constant_value'],
+            "value" => ($rowf['amount'] !== null && $rowf['amount'] !== '') 
+                        ? number_format($rowf['amount'], 2, '.', '') : ''
+        ];
+    }
+}
+?>
+const codesData = <?= json_encode($fees, JSON_PRETTY_PRINT) ?>;
 
-function fmt(n){ 
-  return (Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+function fmt(n) {
+  const num = Number(n) || 0;
+  return num.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 
-function recalcTotal(){
+function populateCodeSelect(sel, selected="") {
+  if (!sel) return;
+  sel.innerHTML = '<option value="">-- Select --</option>';
+  Object.keys(codesData).sort().forEach(k=>{
+    const opt = document.createElement('option');
+    opt.value = k;
+    const val = (codesData[k].value && codesData[k].value !== "") ? (' (₱' + fmt(codesData[k].value) + ')') : '';
+    opt.textContent = k + ' — ' + codesData[k].name + val;
+    if (selected === k) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  const otherOpt = document.createElement('option');
+  otherOpt.value = "OTHER";
+  otherOpt.textContent = "OTHER — Manual Entry";
+  if (selected === "OTHER") otherOpt.selected = true;
+  sel.appendChild(otherOpt);
+}
+
+function onCodeChange(event) {
+  const sel = event.target;
+  const row = sel.closest('.payment-row');
+  const acct = row.querySelector('.acctname');
+  const constv = row.querySelector('.constval');
+  const amt = row.querySelector('.amount');
+
+  if (sel.value === "OTHER") {
+    acct.value = ''; acct.readOnly = false; acct.classList.remove('readonly-bg');
+    constv.value = ''; constv.readOnly = false; constv.classList.remove('readonly-bg');
+    amt.value = ''; amt.readOnly = false;
+  } else if (sel.value && codesData[sel.value]) {
+    acct.value = codesData[sel.value].name || '';
+    acct.readOnly = true; acct.classList.add('readonly-bg');
+    if (codesData[sel.value].const && codesData[sel.value].const.trim() !== "") {
+      constv.value = codesData[sel.value].const;
+      constv.readOnly = true; constv.classList.add('readonly-bg');
+      amt.value = codesData[sel.value].value || '';
+      amt.readOnly = true;
+    } else {
+      constv.value = ''; constv.readOnly = true; constv.classList.add('readonly-bg');
+      amt.value = ''; amt.readOnly = false;
+    }
+  } else {
+    acct.value = ''; acct.readOnly = true; acct.classList.add('readonly-bg');
+    constv.value = ''; constv.readOnly = true; constv.classList.add('readonly-bg');
+    amt.value = ''; amt.readOnly = false;
+  }
+  recalcTotal();
+}
+
+function recalcTotal() {
   let total = 0;
-  $('.amount').each(function(){
-    total += parseFloat($(this).val()) || 0;
+  document.querySelectorAll('.amount').forEach(inp=>{
+    const v = parseFloat(inp.value || 0);
+    if (!isNaN(v)) total += v;
   });
-  $('#totalAmount').text(fmt(total));
+  document.getElementById('totalAmount').textContent = fmt(total);
 }
 
-function initRowEvents(row){
-  $(row).find('.code-select').on('change', function(){
-    let selected = $(this).val();
-    let f = fees[selected] || {};
-    let acct = $(row).find('.acctname');
-    let constv = $(row).find('.constval');
-    let amt = $(row).find('.amount');
+function initRowEvents(row) {
+  const sel = row.querySelector('.code-select');
+  if (sel) {
+    populateCodeSelect(sel, sel.value);
+    sel.addEventListener('change', onCodeChange);
+  }
+  const amt = row.querySelector('.amount');
+  if (amt) amt.addEventListener('input', recalcTotal);
 
-    if(selected === "OTHER"){
-      acct.val('').prop('readonly', false).removeClass('readonly-bg');
-      constv.val('').prop('readonly', false).removeClass('readonly-bg');
-      amt.val('').prop('readonly', false);
-    } else if(f && f.name){
-      acct.val(f.name).prop('readonly', true).addClass('readonly-bg');
-      if(f.const){
-        constv.val(f.const).prop('readonly', true).addClass('readonly-bg');
-        amt.val(f.value).prop('readonly', true);
-      } else {
-        constv.val('').prop('readonly', true).addClass('readonly-bg');
-        amt.val('').prop('readonly', false);
+  const resetBtn = row.querySelector('.reset-row');
+  if (resetBtn) resetBtn.addEventListener('click', function(){
+    row.querySelectorAll('input,select').forEach(el=>{
+      el.value = '';
+      if (el.classList.contains('acctname') || el.classList.contains('constval')) {
+        el.readOnly = true; el.classList.add('readonly-bg');
       }
-    } else {
-      acct.val('').prop('readonly', true).addClass('readonly-bg');
-      constv.val('').prop('readonly', true).addClass('readonly-bg');
-      amt.val('').prop('readonly', false);
-    }
+    });
     recalcTotal();
+    row.classList.add('row-highlight');
+    setTimeout(()=> row.classList.remove('row-highlight'),400);
   });
 
-  $(row).find('.amount').on('input', recalcTotal);
-
-  $(row).find('.reset-row').on('click', function(){
-    $(row).find('input,select').val('');
-    $(row).find('.acctname,.constval').prop('readonly', true).addClass('readonly-bg');
-    recalcTotal();
-    $(row).addClass('row-highlight');
-    setTimeout(()=>$(row).removeClass('row-highlight'),400);
-  });
-
-  $(row).find('.remove-row').on('click', function(){
-    if($('.payment-row').length > 1){
-      $(row).remove();
-      recalcTotal();
+  const delBtn = row.querySelector('.remove-row');
+  if (delBtn) delBtn.addEventListener('click', function(){
+    if (document.querySelectorAll('.payment-row').length > 1) {
+      row.remove(); recalcTotal();
     } else {
-      $(row).find('input,select').val('');
-      $(row).find('.acctname,.constval').prop('readonly', true).addClass('readonly-bg');
+      row.querySelectorAll('input,select').forEach(el=>{
+        el.value = '';
+        if (el.classList.contains('acctname') || el.classList.contains('constval')) {
+          el.readOnly = true; el.classList.add('readonly-bg');
+        }
+      });
       recalcTotal();
     }
   });
 }
 
-$(function(){
-  $('.payment-row').each(function(){ initRowEvents(this); });
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.payment-row').forEach(initRowEvents);
 
-  $('#addRow').on('click', function(){
-    if($('.payment-row').length >= 8){ alert("Max 8 rows."); return; }
-    let clone = $('.payment-row').first().clone();
-    clone.find('input,select').val('');
-    clone.find('.acctname,.constval').prop('readonly', true).addClass('readonly-bg');
-    $('#paymentRows').append(clone);
+  document.getElementById('addRow').addEventListener('click', function(){
+    const rows = document.querySelectorAll('.payment-row');
+    if (rows.length >= 8) { alert("Max 8 rows."); return; }
+
+    const first = rows[0];
+    const clone = first.cloneNode(true);
+    clone.querySelectorAll('input, select').forEach(el => {
+      el.value = '';
+      if (el.classList.contains('acctname') || el.classList.contains('constval')) {
+        el.readOnly = true;
+        el.classList.add('readonly-bg');
+      } else {
+        el.readOnly = false;
+      }
+    });
+
+    document.getElementById('paymentRows').appendChild(clone);
     initRowEvents(clone);
   });
 
   recalcTotal();
 });
+
+function updateChange() {
+  const total = parseFloat(document.getElementById('totalAmount').textContent.replace(/,/g,'')) || 0;
+  const cash = parseFloat(document.getElementById('cashReceived').value) || 0;
+  const change = cash - total;
+  document.getElementById('changeAmount').value = fmt(change >= 0 ? change : 0);
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  const cashInput = document.getElementById('cashReceived');
+  if (cashInput) {
+    cashInput.addEventListener('input', updateChange);
+  }
+  // ensure initial calculation on load
+  updateChange();
+});
+
 </script>
+
+
 </body>
 </html>

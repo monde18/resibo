@@ -13,10 +13,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($username === '' || $password === '') {
         $error = 'Username and password are required.';
     } else {
-        // ✅ fetch first_name and last_name as well
+        // ✅ Fetch user info
         $stmt = $conn->prepare("SELECT id, first_name, last_name, username, password, role, or_start, or_end 
-                        FROM users WHERE username=? LIMIT 1");
-
+                                FROM users WHERE username=? LIMIT 1");
         $stmt->bind_param("s", $username);
         $stmt->execute();
         $res = $stmt->get_result();
@@ -33,6 +32,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['or_end']     = (int)$user['or_end'];
                 $_SESSION['first_name'] = $user['first_name'];
                 $_SESSION['last_name']  = $user['last_name'];
+
+                // ✅ Log activity
+                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                $action = "LOGIN";
+                $details = "User logged in successfully";
+
+                $stmt = $conn->prepare("INSERT INTO activity_logs 
+                    (user_id, username, action, details, ip_address, user_agent) 
+                    VALUES (?,?,?,?,?,?)");
+                $stmt->bind_param("isssss", $_SESSION['user_id'], $_SESSION['username'], $action, $details, $ip, $agent);
+                $stmt->execute();
+                $stmt->close();
 
                 // Redirect to homepage
                 header("Location: index.php");

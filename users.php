@@ -1,14 +1,27 @@
 <?php
-// users.php — User Management with OR tracking via payments table
+// users.php — User Management with OR tracking + Activity Logs
 include 'config.php';
 session_start();
 
+// ========== Helpers ==========
 function sanitize($v) { return htmlspecialchars(trim($v)); }
 
+function logActivity($conn, $userId, $username, $action, $details = '') {
+    $ip     = $_SERVER['REMOTE_ADDR'] ?? '';
+    $agent  = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $stmt   = $conn->prepare("INSERT INTO activity_logs 
+        (user_id, username, action, details, ip_address, user_agent) 
+        VALUES (?,?,?,?,?,?)");
+    $stmt->bind_param("isssss", $userId, $username, $action, $details, $ip, $agent);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// ========== Initialize ==========
 $error = '';
 $success = '';
 
-// ------------------ Create User ------------------
+// ========== Create User ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
     $fname    = sanitize($_POST['fname'] ?? '');
     $lname    = sanitize($_POST['lname'] ?? '');
@@ -23,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
     } elseif ($or_start > $or_end) {
         $error = "OR Start must be less than OR End.";
     } else {
-        // Username uniqueness
+        // Check if username already exists
         $check = $conn->prepare("SELECT COUNT(*) FROM users WHERE username=?");
         $check->bind_param("s", $username);
         $check->execute();
@@ -34,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
         if ($cnt > 0) {
             $error = "⚠️ Username " . htmlspecialchars($username) . " is already taken.";
         } else {
-            // OR overlap check
+            // Check OR range overlap
             $overlap = $conn->prepare("
                 SELECT username, or_start, or_end
                 FROM users
@@ -57,6 +70,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
                 $stmt->bind_param("ssssiii", $fname, $lname, $username, $hash, $role, $or_start, $or_end);
                 if ($stmt->execute()) {
                     $success = "✅ User <strong>" . htmlspecialchars($username) . "</strong> created successfully!";
+
+                    // Log activity
+                    if (isset($_SESSION['user_id'])) {
+                        $details = "Created user: $username (Role: $role, OR Range: $or_start–$or_end)";
+                        logActivity($conn, $_SESSION['user_id'], $_SESSION['username'], "CREATE_USER", $details);
+                    }
                 } else {
                     $error = "Database error: " . $stmt->error;
                 }
@@ -67,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_user'])) {
     }
 }
 
-// ------------------ Edit User ------------------
+// ========== Edit User ==========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
     $id       = intval($_POST['id'] ?? 0);
     $fname    = sanitize($_POST['fname'] ?? '');
@@ -83,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
     } elseif ($or_start > $or_end) {
         $error = "OR Start must be less than OR End.";
     } else {
-        // Username uniqueness excluding current
+        // Username uniqueness check
         $check = $conn->prepare("SELECT COUNT(*) FROM users WHERE username=? AND id<>?");
         $check->bind_param("si", $username, $id);
         $check->execute();
@@ -94,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
         if ($cnt > 0) {
             $error = "⚠️ Username " . htmlspecialchars($username) . " is already taken.";
         } else {
-            // Overlap check excluding current
+            // OR overlap check (excluding current user)
             $overlap = $conn->prepare("
                 SELECT username, or_start, or_end
                 FROM users
@@ -121,6 +140,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
                 }
                 if ($stmt->execute()) {
                     $success = "✅ User <strong>" . htmlspecialchars($username) . "</strong> updated successfully!";
+
+                    // Log activity
+                    if (isset($_SESSION['user_id'])) {
+                        $details = "Edited user: $username (Role: $role, OR Range: $or_start–$or_end)";
+                        logActivity($conn, $_SESSION['user_id'], $_SESSION['username'], "EDIT_USER", $details);
+                    }
                 } else {
                     $error = "Database error: " . $stmt->error;
                 }
@@ -131,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_user'])) {
     }
 }
 
-// ------------------ Fetch users and calculate usage ------------------
+// ========== Fetch users and calculate OR usage ==========
 $users = [];
 $sql = "SELECT * FROM users ORDER BY created_at DESC";
 $res = $conn->query($sql);

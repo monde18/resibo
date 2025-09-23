@@ -61,6 +61,13 @@
 <?php endif; ?>
 
 <?php include 'navbar.php'; ?>
+<?php if (isset($_GET['updated']) && $_GET['updated'] == 1): ?>
+  <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+    ✅ Payment record updated successfully!
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+<?php endif; ?>
+
 <div class="container py-4">
 
   <div class="card p-4">
@@ -186,6 +193,14 @@
       <p>Confirm details for printing the receipt.</p>
 
       <div class="mb-3">
+        <label class="form-label">Official Receipt (OR) Number</label>
+        <div class="input-group">
+          <input type="text" class="form-control" id="printOR" readonly>
+          <button class="btn btn-outline-warning" type="button" id="editORBtn">Change OR</button>
+        </div>
+      </div>
+
+      <div class="mb-3">
         <label class="form-label">Payor</label>
         <input type="text" class="form-control" id="printPayor" readonly>
       </div>
@@ -201,9 +216,7 @@
                 <th>Amount (₱)</th>
               </tr>
             </thead>
-            <tbody>
-              <!-- Populated dynamically -->
-            </tbody>
+            <tbody></tbody>
           </table>
         </div>
       </div>
@@ -289,61 +302,73 @@ $(function(){
     },'json').fail(()=>alert('Error archiving record.'));
   };
 
-  // Print modal logic
-// Open Print Modal and fetch record details
-window.openPrintModal=function(id){
-  $('#printRecordId').val(id);
+  // OR edit button
+  $('#editORBtn').on('click', function(){
+    let input = $('#printOR');
+    input.prop('readonly', false).focus();
+    $(this).text('Editing...').prop('disabled', true);
+  });
 
-  // Clear table first
-  $('#printPaymentsTable tbody').empty();
+  // Open Print Modal
+  window.openPrintModal=function(id){
+    $('#printRecordId').val(id);
+    $('#printPaymentsTable tbody').empty();
 
-  $.post('get_record.php', {id:id}, function(res){
-    if(res.success){
-      $('#printPayor').val(res.data.payee);
-      $('#printTotal').val("₱ " + parseFloat(res.data.total).toFixed(2));
-      $('#printCashReceived').val("₱ " + parseFloat(res.data.cash_received).toFixed(2));
-      $('#printChange').val("₱ " + parseFloat(res.data.change_amount).toFixed(2));
+    $.post('get_record.php', {id:id}, function(res){
+      if(res.success){
+        $('#printOR').val(res.data.reference_no).prop('readonly', true);
+        $('#editORBtn').text('Change OR').prop('disabled', false);
 
-      // Populate payments table
-      res.data.payments.forEach(function(p){
-        $('#printPaymentsTable tbody').append(`
-          <tr>
-            <td>${p.code}</td>
-            <td>${p.account}</td>
-            <td class="text-end">₱ ${parseFloat(p.amount).toFixed(2)}</td>
-          </tr>
-        `);
-      });
+        $('#printPayor').val(res.data.payee);
+        $('#printTotal').val("₱ " + parseFloat(res.data.total).toFixed(2));
+        $('#printCashReceived').val("₱ " + parseFloat(res.data.cash_received).toFixed(2));
+        $('#printChange').val("₱ " + parseFloat(res.data.change_amount).toFixed(2));
 
-      $('#printModal').modal('show');
-    } else {
-      alert("Error fetching record: " + res.message);
-    }
-  },'json');
-};
-// Print Record
-window.printRecord=function(){
-  const id=$('#printRecordId').val();
+        res.data.payments.forEach(function(p){
+          $('#printPaymentsTable tbody').append(`
+            <tr>
+              <td>${p.code}</td>
+              <td>${p.account}</td>
+              <td class="text-end">₱ ${parseFloat(p.amount).toFixed(2)}</td>
+            </tr>
+          `);
+        });
 
-  let form=document.createElement("form");
-  form.method="POST";
-  form.action="receipt.php";
-  form.target="_blank";
+        $('#printModal').modal('show');
+      } else {
+        alert("Error fetching record: " + res.message);
+      }
+    },'json');
+  };
 
-  let inputId=document.createElement("input");
-  inputId.type="hidden";
-  inputId.name="id";
-  inputId.value=id;
-  form.appendChild(inputId);
+  // Print Record
+  window.printRecord=function(){
+    const id = $('#printRecordId').val();
+    const orNumber = $('#printOR').val();
 
-  document.body.appendChild(form);
-  form.submit();
-  document.body.removeChild(form);
+    let form = document.createElement("form");
+    form.method = "POST";
+    form.action = "print_receipt.php";
+    form.target = "_blank";
 
-  $('#printModal').modal('hide');
-};
+    let inputId = document.createElement("input");
+    inputId.type = "hidden";
+    inputId.name = "id";
+    inputId.value = id;
+    form.appendChild(inputId);
 
+    let inputOR = document.createElement("input");
+    inputOR.type = "hidden";
+    inputOR.name = "or_number";
+    inputOR.value = orNumber;
+    form.appendChild(inputOR);
 
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
+
+    $('#printModal').modal('hide');
+  };
 
   // Dropdown filters
   table.column(1).data().unique().sort().each(d=>$('#payeeFilter').append(`<option value="${d}">${d}</option>`));
@@ -353,7 +378,6 @@ window.printRecord=function(){
   $('#refFilter').on('change',function(){ table.column(2).search(this.value).draw(); });
   $('#minDate,#maxDate').on('change',()=>table.draw());
 
-  // Reset filters
   $('#resetFilters').on('click',function(){
     $('#payeeFilter').val('').trigger('change');
     $('#refFilter').val('').trigger('change');

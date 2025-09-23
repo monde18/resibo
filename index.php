@@ -1,5 +1,5 @@
 <?php
-// index.php — Payments Entry with OR validation and usage marking
+// index.php — Payments Entry with OR validation, usage marking, and activity logging
 include 'config.php';
 session_start();
 
@@ -10,11 +10,11 @@ $error = '';
 $warning = '';
 $saved_total = 0;
 
-$or_start = $or_end = $last_used = $next_available = null;
+$or_start = $or_end = $last_used = null;
 
 $uid = $_SESSION['user_id'] ?? null;
 if ($uid) {
-    // get range
+    // get user OR range
     $stmt = $conn->prepare("SELECT or_start, or_end FROM users WHERE id=?");
     $stmt->bind_param("i", $uid);
     $stmt->execute();
@@ -30,22 +30,8 @@ if ($uid) {
     $stmt2->fetch();
     $stmt2->close();
 
-    if (!$last_used) {
-        $last_used = null;
-    }
-
-// // get next available OR
-// if ($last_used) {
-//     $next_available = $last_used + 1;
-//     if ($next_available > $or_end) {
-//         $next_available = null; // no more OR left
-//     }
-// } else {
-//     $next_available = $or_start; // first OR if none used yet
-// }}
-
+    if (!$last_used) $last_used = null;
 }
-
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $date  = sanitize($_POST['date'] ?? '');
@@ -56,180 +42,192 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acctnames = $_POST['acctname'] ?? [];
     $amounts   = $_POST['amount'] ?? [];
 
-    // basic validation
+    // ✅ Basic validation
     if (!$date || !$payee || !$refno) {
         $error = "Date, Payee and Reference No. are required.";
+    } elseif (!$uid) {
+        $error = "You must be logged in.";
     } else {
-        // 🔐 check if refno belongs to current user
-        if (!$uid) {
-            $error = "You must be logged in.";
-        } else {
-            $stmt = $conn->prepare("SELECT or_start, or_end FROM users WHERE id=?");
-            if ($stmt) {
-                $stmt->bind_param("i", $uid);
-                $stmt->execute();
-                $stmt->bind_result($or_start, $or_end);
-                $stmt->fetch();
-                $stmt->close();
+        // 🔐 OR range check
+        $stmt = $conn->prepare("SELECT or_start, or_end FROM users WHERE id=?");
+        $stmt->bind_param("i", $uid);
+        $stmt->execute();
+        $stmt->bind_result($or_start, $or_end);
+        $stmt->fetch();
+        $stmt->close();
 
-                if ($refno < $or_start || $refno > $or_end) {
-                    $error = "⚠️ OR No. $refno is not within your assigned range ($or_start - $or_end).";
-                } else {
-                    // ✅ Check if OR number already used
-                    $chk = $conn->prepare("SELECT is_used FROM or_numbers WHERE user_id=? AND or_number=?");
-                    if ($chk) {
-                        $chk->bind_param("ii", $uid, $refno);
-                        $chk->execute();
-                        $chk->bind_result($is_used);
-                        if ($chk->fetch() && $is_used == 1) {
-                            $error = "⚠️ OR No. $refno has already been used.";
-                        }
-                        $chk->close();
-                    }
-                }
-            } else {
-                $error = "Database error: " . $conn->error;
+        if ($refno < $or_start || $refno > $or_end) {
+            $error = "⚠️ OR No. $refno is not within your assigned range ($or_start - $or_end).";
+        } else {
+            // 🔐 check if OR already marked used
+            $chk = $conn->prepare("SELECT is_used FROM or_numbers WHERE user_id=? AND or_number=?");
+            $chk->bind_param("ii", $uid, $refno);
+            $chk->execute();
+            $chk->bind_result($is_used);
+            if ($chk->fetch() && $is_used == 1) {
+                $error = "⚠️ OR No. $refno has already been used.";
             }
+            $chk->close();
         }
     }
 
-    // only continue if no error yet
+    // ✅ Continue only if no errors
     if (!$error) {
-        // duplicate reference no. check
+        // duplicate OR in payments
         $check = $conn->prepare("SELECT COUNT(*) FROM payments WHERE reference_no=?");
-        if ($check) {
-            $check->bind_param("i", $refno);
-            $check->execute();
-            $check->bind_result($count);
-            $check->fetch();
-            $check->close();
+        $check->bind_param("i", $refno);
+        $check->execute();
+        $check->bind_result($count);
+        $check->fetch();
+        $check->close();
 
-            if ($count > 0) {
-                $warning = "⚠️ Reference No. <strong>" . htmlentities($refno) . "</strong> already exists.";
-            } else {
-                // lookup constants from fees
-                $feesLookup = [];
-                $res = $conn->query("SELECT code, constant_value FROM fees");
-                if ($res) {
-                    while ($row = $res->fetch_assoc()) {
-                        if ($row['constant_value'] !== null && $row['constant_value'] !== '') {
-                            $feesLookup[$row['code']] = $row['constant_value'];
-                        }
-                    }
-                }
-
-                $codesArr = [];
-                $acctsArr = [];
-                $amtsArr  = [];
-
-                for ($i=0; $i<8; $i++) {
-                    $code  = sanitize($codes[$i] ?? '');
-                    $acct  = sanitize($acctnames[$i] ?? '');
-                    $rawAmt = $amounts[$i] ?? '';
-                    $amt   = is_numeric(str_replace(',', '', $rawAmt)) ? number_format((float)str_replace(',', '', $rawAmt),2,'.','') : '0.00';
-
-                    // auto-fill if fee has constant value
-                    if ($code && strtoupper($code) !== 'OTHER') {
-                        if (isset($feesLookup[$code]) && $feesLookup[$code] !== '') {
-                            $amt = $feesLookup[$code];
-                        }
-                    }
-
-                    $codesArr[$i] = $code;
-                    $acctsArr[$i] = $acct;
-                    $amtsArr[$i]  = $amt;
-                }
-
-                // total
-                $total = 0.0;
-                foreach ($amtsArr as $a) {
-                    $n = str_replace(',', '', $a);
-                    if (is_numeric($n)) $total += (float)$n;
-                }
-                $total = number_format($total, 2, '.', '');
-
-                // insert into payments
-$sql = "
-    INSERT INTO payments
-    (`date`, payee, reference_no,
-     code1, account_name1, amount1,
-     code2, account_name2, amount2,
-     code3, account_name3, amount3,
-     code4, account_name4, amount4,
-     code5, account_name5, amount5,
-     code6, account_name6, amount6,
-     code7, account_name7, amount7,
-     code8, account_name8, amount8,
-     total, cash_received, change_amount,
-     archived, archive_reason, archived_date
-    ) VALUES (
-     ?, ?, ?,
-     ?, ?, ?,
-     ?, ?, ?,
-     ?, ?, ?,
-     ?, ?, ?,
-     ?, ?, ?,
-     ?, ?, ?,
-     ?, ?, ?,
-     ?, ?, ?,
-     ?, ?, ?, ?, ?, ?
-    )
-";
-
-                $stmt = $conn->prepare($sql);
-                if (!$stmt) {
-                    $error = "Prepare failed: " . $conn->error;
-                } else {
-$cash_received = floatval($_POST['cash_received'] ?? 0);
-$change_amount = $cash_received - floatval($total);
-
-$archived = 0;
-$archive_reason = NULL;
-$archived_date = NULL;
-
-$types = "ssi" . str_repeat("ssd", 8) . "dddiss";
-
-$stmt->bind_param(
-    $types,
-    $date, $payee, $refno,
-    $codesArr[0], $acctsArr[0], $amtsArr[0],
-    $codesArr[1], $acctsArr[1], $amtsArr[1],
-    $codesArr[2], $acctsArr[2], $amtsArr[2],
-    $codesArr[3], $acctsArr[3], $amtsArr[3],
-    $codesArr[4], $acctsArr[4], $amtsArr[4],
-    $codesArr[5], $acctsArr[5], $amtsArr[5],
-    $codesArr[6], $acctsArr[6], $amtsArr[6],
-    $codesArr[7], $acctsArr[7], $amtsArr[7],
-    $total, $cash_received, $change_amount,
-    $archived, $archive_reason, $archived_date
-);
-
-if ($stmt->execute()) {
-    $last_id = $conn->insert_id;
-
-    // ✅ mark OR as used
-    $upd = $conn->prepare("UPDATE or_numbers 
-                           SET is_used=1, used_date=NOW(), used_code=?, used_account=? 
-                           WHERE user_id=? AND or_number=?");
-    if ($upd) {
-        $firstCode  = $codesArr[0] ?? '';
-        $firstAcct  = $acctsArr[0] ?? '';
-        $upd->bind_param("ssii", $firstCode, $firstAcct, $uid, $refno);
-        $upd->execute();
-        $upd->close();
-    }
-
-    header("Location: print_receipt.php?id=$last_id");
-    exit;
-
-                    } else {
-                        $error = "Database error: " . $stmt->error;
-                    }
-                    $stmt->close();
+        if ($count > 0) {
+            $warning = "⚠️ Reference No. <strong>" . htmlentities($refno) . "</strong> already exists.";
+        } else {
+            // get constants from fees
+            $feesLookup = [];
+            $res = $conn->query("SELECT code, constant_value FROM fees");
+            while ($row = $res->fetch_assoc()) {
+                if ($row['constant_value'] !== null && $row['constant_value'] !== '') {
+                    $feesLookup[$row['code']] = $row['constant_value'];
                 }
             }
-        } else {
-            $error = "Database error: " . $conn->error;
+
+            $codesArr = [];
+            $acctsArr = [];
+            $amtsArr  = [];
+
+            for ($i=0; $i<8; $i++) {
+                $code   = sanitize($codes[$i] ?? '');
+                $acct   = sanitize($acctnames[$i] ?? '');
+                $rawAmt = $amounts[$i] ?? '';
+                $amt    = str_replace(',', '', $rawAmt);
+
+                if ($code === '' && $acct === '' && $amt === '') {
+                    $codesArr[$i] = $acctsArr[$i] = $amtsArr[$i] = null;
+                    continue;
+                }
+
+                $amt = is_numeric($amt) ? number_format((float)$amt, 2, '.', '') : null;
+
+                // auto-fill constant value
+                if ($code && strtoupper($code) !== 'OTHER' && isset($feesLookup[$code]) && $feesLookup[$code] !== '') {
+                    $amt = $feesLookup[$code];
+                }
+
+                $codesArr[$i] = $code ?: null;
+                $acctsArr[$i] = $acct ?: null;
+                $amtsArr[$i]  = $amt;
+            }
+
+            // total
+            $total = 0.0;
+            foreach ($amtsArr as $a) {
+                if ($a !== null && is_numeric($a)) {
+                    $total += (float)$a;
+                }
+            }
+            $total = number_format($total, 2, '.', '');
+
+            // save payment
+            $sql = "
+                INSERT INTO payments
+                (`date`, payee, reference_no,
+                 code1, account_name1, amount1,
+                 code2, account_name2, amount2,
+                 code3, account_name3, amount3,
+                 code4, account_name4, amount4,
+                 code5, account_name5, amount5,
+                 code6, account_name6, amount6,
+                 code7, account_name7, amount7,
+                 code8, account_name8, amount8,
+                 total, cash_received, change_amount,
+                 archived, archive_reason, archived_date
+                ) VALUES (
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?,
+                 ?, ?, ?, ?, ?, ?
+                )
+            ";
+
+            $stmt = $conn->prepare($sql);
+            if (!$stmt) {
+                $error = "Prepare failed: " . $conn->error;
+            } else {
+                $cash_received = floatval($_POST['cash_received'] ?? 0);
+                $change_amount = $cash_received - floatval($total);
+                $archived = 0;
+                $archive_reason = NULL;
+                $archived_date = NULL;
+
+                $types = "ssi" . str_repeat("ssd", 8) . "dddiss";
+
+                $stmt->bind_param(
+                    $types,
+                    $date, $payee, $refno,
+                    $codesArr[0], $acctsArr[0], $amtsArr[0],
+                    $codesArr[1], $acctsArr[1], $amtsArr[1],
+                    $codesArr[2], $acctsArr[2], $amtsArr[2],
+                    $codesArr[3], $acctsArr[3], $amtsArr[3],
+                    $codesArr[4], $acctsArr[4], $amtsArr[4],
+                    $codesArr[5], $acctsArr[5], $amtsArr[5],
+                    $codesArr[6], $acctsArr[6], $amtsArr[6],
+                    $codesArr[7], $acctsArr[7], $amtsArr[7],
+                    $total, $cash_received, $change_amount,
+                    $archived, $archive_reason, $archived_date
+                );
+
+                if ($stmt->execute()) {
+                    $last_id = $conn->insert_id;
+
+                    // ✅ mark OR as used
+                    $upd = $conn->prepare("UPDATE or_numbers 
+                                           SET is_used=1, used_date=NOW(), used_code=?, used_account=? 
+                                           WHERE user_id=? AND or_number=?");
+                    if ($upd) {
+                        $firstCode = $codesArr[0] ?? '';
+                        $firstAcct = $acctsArr[0] ?? '';
+                        $upd->bind_param("ssii", $firstCode, $firstAcct, $uid, $refno);
+                        $upd->execute();
+                        $upd->close();
+                    }
+
+                    // ✅ log activity
+                    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                    $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+                    $action = "ADD_PAYMENT";
+                    $details = "Payment ID: $last_id, OR#: $refno, Payee: $payee, Total: ₱" . number_format($total, 2);
+
+                    $log = $conn->prepare("INSERT INTO activity_logs 
+                        (user_id, username, action, details, ip_address, user_agent) 
+                        VALUES (?,?,?,?,?,?)");
+                    $log->bind_param(
+                        "isssss",
+                        $_SESSION['user_id'],
+                        $_SESSION['username'],
+                        $action,
+                        $details,
+                        $ip,
+                        $agent
+                    );
+                    $log->execute();
+                    $log->close();
+
+                    // redirect to print
+                    header("Location: print_receipt.php?id=$last_id");
+                    exit;
+                } else {
+                    $error = "Database error: " . $stmt->error;
+                }
+                $stmt->close();
+            }
         }
     }
 }
@@ -240,6 +238,8 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
     unset($_SESSION['saved_total']);
 }
 ?>
+
+
 
 
 <!doctype html>
@@ -298,10 +298,7 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
               <strong>Last OR Used:
               <?= $last_used ? str_pad($last_used, 5, '0', STR_PAD_LEFT) : "None yet" ?></strong>
             </div>
-            <div>
-              <strong>|</strong>
-              <?= $next_available ? str_pad($next_available, 5, '0', STR_PAD_LEFT) : "" ?>
-            </div>
+
           </div>
         <?php endif; ?>
         <form id="paymentsForm" method="post" class="needs-validation" novalidate>

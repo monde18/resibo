@@ -1,17 +1,22 @@
 <?php
 include 'config.php';
-$id = intval($_GET['id'] ?? 0);
+
+// Get record by ID
+$id = intval($_POST['id'] ?? ($_GET['id'] ?? 0));
+$manualOR = $_POST['or_number'] ?? null;
 
 $res = $conn->query("SELECT * FROM payments WHERE id=$id");
 $row = $res->fetch_assoc();
 
+// Use manual OR if provided
+// $orNumber = $manualOR && trim($manualOR) !== "" ? $manualOR : $row['reference_no'];
+
 /**
- * Convert number into words (Pesos + Centavos)
+ * Convert number into words (ALL CAPS, with AND instead of commas)
  */
 function numberToWords($number) {
     $hyphen      = '-';
     $conjunction = ' and ';
-    $separator   = ', ';
     $negative    = 'negative ';
     $dictionary  = array(
         0 => 'zero',
@@ -81,8 +86,7 @@ function numberToWords($number) {
             $remainder = $number % $baseUnit;
             $string = numberToWords($numBaseUnits) . ' ' . $dictionary[$baseUnit];
             if ($remainder) {
-                $string .= $remainder < 100 ? $conjunction : $separator;
-                $string .= numberToWords($remainder);
+                $string .= $conjunction . numberToWords($remainder);
             }
             break;
     }
@@ -95,7 +99,7 @@ function numberToWords($number) {
         $string .= " pesos";
     }
 
-    return ucfirst($string) . " only";
+    return strtoupper($string . " only");
 }
 ?>
 <!DOCTYPE html>
@@ -117,26 +121,34 @@ function numberToWords($number) {
       position: absolute;
       font-size: 11px;
       font-family: Arial, sans-serif;
-      white-space: nowrap;
     }
     /* Fixed fields */
-    #date   { left: 10.5mm; top: 49.9mm; }
-    #payee  { left: 9.5mm;  top: 65.7mm; }
-    #total  { left: 70.5mm; top:132.2mm; font-weight:bold; }
-    #words  { left: 7.9mm;  top:140.4mm; width:90mm; }
-    #cashX  { left:21.5mm;  top:150.8mm; font-weight:bold; }
+    #date   { left: 10.5mm; top: 49.9mm; white-space: nowrap; }
+    #payee  { left: 9.5mm;  top: 65.7mm; white-space: nowrap; }
+    #orNo   { left: 70mm;   top: 45mm; font-weight:bold; white-space: nowrap; }
+    #total  { left: 70.5mm; top:132.2mm; font-weight:bold; white-space: nowrap; }
+    #words  { 
+      left: 7.9mm;  
+      top:140.4mm; 
+      width: 90mm; 
+      line-height: 1.2em; 
+      white-space: normal;
+      word-wrap: break-word;
+    }
+    #cashX  { left:21.5mm;  top:150.8mm; font-weight:bold; white-space: nowrap; }
   </style>
 </head>
 <body onload="window.print()">
   <div id="receipt">
     <div id="date"  class="field"><?= htmlspecialchars($row['date']) ?></div>
     <div id="payee" class="field"><?= htmlspecialchars($row['payee']) ?></div>
+    <!-- <div id="orNo"  class="field">OR: <?= htmlspecialchars($orNumber) ?></div> -->
 
     <?php
-    // Y starting pos
-    $yStartAcct = 81.5; // first row account top
-    $yStartAmt  = 81.5; // first row amount top
-    $rowGap     = 6;    // mm gap between rows
+    // Starting Y positions for dynamic rows
+    $yStartAcct = 81.5; 
+    $yStartAmt  = 81.5; 
+    $rowGap     = 6;    
 
     for ($i=1; $i<=8; $i++) {
         $acct  = $row["account_name$i"];
@@ -146,8 +158,8 @@ function numberToWords($number) {
             $acctY = $yStartAcct + (($i-1) * $rowGap);
             $amtY  = $yStartAmt  + (($i-1) * $rowGap);
 
-            echo '<div class="field" style="left:9.5mm;top:'.$acctY.'mm;">'.htmlspecialchars($acct).'</div>';
-            echo '<div class="field" style="left:70.0mm;top:'.$amtY.'mm;">'.number_format($amt,2).'</div>';
+            echo '<div class="field" style="left:9.5mm;top:'.$acctY.'mm;white-space:nowrap;">'.htmlspecialchars($acct).'</div>';
+            echo '<div class="field" style="left:70.0mm;top:'.$amtY.'mm;white-space:nowrap;">'.number_format($amt,2).'</div>';
         }
     }
     ?>
