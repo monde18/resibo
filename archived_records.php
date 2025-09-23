@@ -35,7 +35,7 @@
           <tr>
             <th>Date</th>
             <th>Payee</th>
-            <th>Reference No.</th>
+            <th>OR No.</th>
             <th>Total</th>
             <th>Archive Reason</th>
             <th>Archived Date</th>

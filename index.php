@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $check->close();
 
         if ($count > 0) {
-            $warning = "⚠️ Reference No. <strong>" . htmlentities($refno) . "</strong> already exists.";
+            $warning = "⚠️ OR No. <strong>" . htmlentities($refno) . "</strong> already exists.";
         } else {
             // get constants from fees
             $feesLookup = [];

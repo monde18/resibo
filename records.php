@@ -84,7 +84,7 @@
         </select>
       </div>
       <div class="col-md-3">
-        <label class="form-label">Filter by Reference No.</label>
+        <label class="form-label">Filter by OR No.</label>
         <select id="refFilter" class="form-select">
           <option value="">All References</option>
         </select>
@@ -110,7 +110,7 @@
           <tr>
             <th>Date</th>
             <th>Payee</th>
-            <th>Reference No.</th>
+            <th>OR No.</th>
             <th>Payments</th>
             <th>Total</th>
             <th>Cash Received</th>

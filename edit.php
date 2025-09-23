@@ -61,7 +61,7 @@ $row = $result->fetch_assoc();
             <input type="text" name="payee" value="<?= htmlspecialchars($row['payee']) ?>" class="form-control" required>
           </div>
           <div class="col-md-4">
-            <label class="form-label">Reference No.</label>
+            <label class="form-label">OR No.</label>
             <input type="text" name="refno" value="<?= htmlspecialchars($row['reference_no']) ?>" class="form-control" required>
           </div>
         </div>
