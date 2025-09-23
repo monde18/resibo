@@ -204,22 +204,24 @@ $stmt->bind_param(
     $archived, $archive_reason, $archived_date
 );
 
-                    if ($stmt->execute()) {
-                        // ✅ mark OR as used
-                        $upd = $conn->prepare("UPDATE or_numbers 
-                                               SET is_used=1, used_date=NOW(), used_code=?, used_account=? 
-                                               WHERE user_id=? AND or_number=?");
-                        if ($upd) {
-                            $firstCode  = $codesArr[0] ?? '';
-                            $firstAcct  = $acctsArr[0] ?? '';
-                            $upd->bind_param("ssii", $firstCode, $firstAcct, $uid, $refno);
-                            $upd->execute();
-                            $upd->close();
-                        }
+if ($stmt->execute()) {
+    $last_id = $conn->insert_id;
 
-                        $_SESSION['saved_total'] = $total;
-                        header("Location: index.php?success=1");
-                        exit;
+    // ✅ mark OR as used
+    $upd = $conn->prepare("UPDATE or_numbers 
+                           SET is_used=1, used_date=NOW(), used_code=?, used_account=? 
+                           WHERE user_id=? AND or_number=?");
+    if ($upd) {
+        $firstCode  = $codesArr[0] ?? '';
+        $firstAcct  = $acctsArr[0] ?? '';
+        $upd->bind_param("ssii", $firstCode, $firstAcct, $uid, $refno);
+        $upd->execute();
+        $upd->close();
+    }
+
+    header("Location: print_receipt.php?id=$last_id");
+    exit;
+
                     } else {
                         $error = "Database error: " . $stmt->error;
                     }
