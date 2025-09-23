@@ -1,7 +1,9 @@
 <?php
 // users.php — User Management with OR tracking + Activity Logs
 include 'config.php';
-session_start();
+include 'auth.php';
+require_role(['admin']);
+
 
 // ========== Helpers ==========
 function sanitize($v) { return htmlspecialchars(trim($v)); }

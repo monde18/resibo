@@ -1,5 +1,9 @@
 <?php
 include 'config.php';
+include 'auth.php';
+require_role(['admin']);
+
+
 
 // Handle form submission for adding/editing
 $edit_mode = false;

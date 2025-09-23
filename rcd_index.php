@@ -264,7 +264,7 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
   </style>
 </head>
 <body>
-<?php include 'navbar.php'; ?>
+<?php include 'nvbar.php'; ?>
 
 <div class="container py-4">
   <?php if ($error): ?>

@@ -1,11 +1,8 @@
 <?php include 'config.php';
-include 'auth.php';
-require_role(['admin','cashier','encoder']);
-;
 
 
 ?>
-
+<
 <!doctype html>
 <html lang="en">
 <head>
@@ -148,7 +145,7 @@ require_role(['admin','cashier','encoder']);
           <td>
             <div class="action-buttons">
               <a href="edit.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-warning btn-icon"><span class="material-icons">edit</span></a>
-              <!-- <a href="delete.php?id=<?= $row['id'] ?>" onclick="return confirm('Delete this record?')" class="btn btn-sm btn-danger btn-icon"><span class="material-icons">delete</span></a> -->
+              <a href="delete.php?id=<?= $row['id'] ?>" onclick="return confirm('Delete this record?')" class="btn btn-sm btn-danger btn-icon"><span class="material-icons">delete</span></a>
               <button class="btn btn-sm btn-print btn-icon" onclick="openPrintModal(<?= $row['id'] ?>)" data-bs-toggle="modal" data-bs-target="#printModal"><span class="material-icons">print</span></button>
               <button class="btn btn-sm btn-archive btn-icon" onclick="openArchiveModal(<?= $row['id'] ?>)" data-bs-toggle="modal" data-bs-target="#archiveModal"><span class="material-icons">archive</span></button>
             </div>

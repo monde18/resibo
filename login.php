@@ -46,9 +46,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute();
                 $stmt->close();
 
-                // Redirect to homepage
-                header("Location: index.php");
+                // ✅ Redirect based on role
+                if (strtolower($_SESSION['role']) === 'encoder') {
+                    header("Location: index7.php");
+                } elseif (strtolower($_SESSION['role']) === 'cashier') {
+                    header("Location: index8.php");
+                } else {
+                    header("Location: index.php"); // default for admin or others
+                }
                 exit;
+
             } else {
                 $error = '❌ Invalid password. Try again.';
             }

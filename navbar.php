@@ -8,13 +8,14 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 // Get user info from session
 $user_first = $_SESSION['first_name'] ?? 'Guest';
-$user_last = $_SESSION['last_name'] ?? '';
+$user_last  = $_SESSION['last_name'] ?? '';
+$user_role  = strtolower($_SESSION['role'] ?? 'guest'); // normalize role
 ?>
 <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom shadow-sm">
   <div class="container">
     <a class="navbar-brand fw-bold" href="index.php">
         <img src="assests/logo.png" alt="Logo" style="height:52px; width:52px; margin-right:8px;">
-     E-RECEIPTS
+        E-RECEIPTS
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
       <span class="navbar-toggler-icon"></span>
@@ -23,41 +24,75 @@ $user_last = $_SESSION['last_name'] ?? '';
     <div class="collapse navbar-collapse" id="mainNav">
       <!-- Left Nav -->
       <ul class="navbar-nav ms-auto nav-tabs">
+
+        <!-- Common for all roles -->
         <li class="nav-item">
           <a class="nav-link <?php if($current_page=='dashboard.php') echo 'active'; ?>" href="dashboard.php">
             <span class="material-icons">home</span> Dashboard
           </a>
         </li>
-        <li class="nav-item">
-          <a class="nav-link <?php if($current_page=='index.php') echo 'active'; ?>" href="index.php">
-            <span class="material-icons">add</span> New
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link <?php if($current_page=='records.php') echo 'active'; ?>" href="records.php">
-            <span class="material-icons">table_view</span> Records
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link <?php if($current_page=='fees1.php') echo 'active'; ?>" href="fees1.php">
-            <span class="material-icons">money</span> Fees
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link <?php if($current_page=='archived_records.php') echo 'active'; ?>" href="archived_records.php">
-            <span class="material-icons">archive</span> Archive
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link <?php if($current_page=='reports.php') echo 'active'; ?>" href="reports.php">
-            <span class="material-icons">bar_chart</span> Reports
-          </a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link <?php if($current_page=='users.php') echo 'active'; ?>" href="users.php">
-            <span class="material-icons">group</span> Users
-          </a>
-        </li>
+
+        <!-- Encoder-specific (New + Records only) -->
+        <?php if ($user_role === 'encoder'): ?>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='index7.php') echo 'active'; ?>" href="index7.php">
+              <span class="material-icons">add</span> New
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='records.php') echo 'active'; ?>" href="records.php">
+              <span class="material-icons">table_view</span> Records
+            </a>
+          </li>
+        <?php endif; ?>
+
+        <!-- Cashier-specific (New + Records only) -->
+        <?php if ($user_role === 'cashier'): ?>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='index8.php') echo 'active'; ?>" href="index8.php">
+              <span class="material-icons">add</span> New
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='records.php') echo 'active'; ?>" href="records.php">
+              <span class="material-icons">table_view</span> Records
+            </a>
+          </li>
+        <?php endif; ?>
+
+        <!-- Admin-only links -->
+        <?php if ($user_role === 'admin'): ?>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='index.php') echo 'active'; ?>" href="index.php">
+              <span class="material-icons">add</span> New
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='records.php') echo 'active'; ?>" href="records.php">
+              <span class="material-icons">table_view</span> Records
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='fees1.php') echo 'active'; ?>" href="fees1.php">
+              <span class="material-icons">money</span> Fees
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='archived_records.php') echo 'active'; ?>" href="archived_records.php">
+              <span class="material-icons">archive</span> Archive
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='reports.php') echo 'active'; ?>" href="reports.php">
+              <span class="material-icons">bar_chart</span> Reports
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link <?php if($current_page=='users.php') echo 'active'; ?>" href="users.php">
+              <span class="material-icons">group</span> Users
+            </a>
+          </li>
+        <?php endif; ?>
       </ul>
 
       <!-- Right User Dropdown -->
@@ -103,7 +138,7 @@ $user_last = $_SESSION['last_name'] ?? '';
   color: #0d6efd;
   background: #fff;
   border: 1px solid #dee2e6;
-  border-bottom: 2px solid #fff; /* creates the cut-out effect */
+  border-bottom: 2px solid #fff;
   box-shadow: 0 -2px 6px rgba(0,0,0,.05);
 }
 </style>

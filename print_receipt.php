@@ -14,7 +14,7 @@ $row = $res->fetch_assoc();
 /**
  * Convert number into words (ALL CAPS, with AND instead of commas)
  */
-function numberToWords($number) {
+function numberToWords($number, $isRoot = true) {
     $hyphen      = '-';
     $conjunction = ' and ';
     $negative    = 'negative ';
@@ -54,7 +54,7 @@ function numberToWords($number) {
     );
 
     if (!is_numeric($number)) return false;
-    if ($number < 0) return $negative . numberToWords(abs($number));
+    if ($number < 0) return $negative . numberToWords(abs($number), false);
 
     $string = $fraction = null;
 
@@ -78,29 +78,35 @@ function numberToWords($number) {
             $hundreds  = (int) ($number / 100);
             $remainder = $number % 100;
             $string = $dictionary[$hundreds] . ' ' . $dictionary[100];
-            if ($remainder) $string .= $conjunction . numberToWords($remainder);
+            if ($remainder) {
+                $string .= ' ' . numberToWords($remainder, false); // ✅ no pesos here
+            }
             break;
         default:
             $baseUnit = pow(1000, floor(log($number, 1000)));
             $numBaseUnits = (int) ($number / $baseUnit);
             $remainder = $number % $baseUnit;
-            $string = numberToWords($numBaseUnits) . ' ' . $dictionary[$baseUnit];
+            $string = numberToWords($numBaseUnits, false) . ' ' . $dictionary[$baseUnit];
             if ($remainder) {
-                $string .= $conjunction . numberToWords($remainder);
+                $string .= $conjunction . numberToWords($remainder, false);
             }
             break;
     }
 
-    // Handle centavos
-    if ($fraction !== null && is_numeric($fraction) && intval($fraction) > 0) {
-        $fraction = str_pad($fraction, 2, "0"); // ensure 2 digits
-        $string .= " pesos and " . numberToWords(intval($fraction)) . " centavos";
-    } else {
-        $string .= " pesos";
+    // ✅ Add "pesos only" at the root call only
+    if ($isRoot) {
+        if ($fraction !== null && is_numeric($fraction) && intval($fraction) > 0) {
+            $fraction = str_pad($fraction, 2, "0");
+            $string .= " pesos and " . numberToWords(intval($fraction), false) . " centavos only";
+        } else {
+            $string .= " pesos only";
+        }
+        return strtoupper($string);
     }
 
-    return strtoupper($string . " only");
+    return $string;
 }
+
 ?>
 <!DOCTYPE html>
 <html>

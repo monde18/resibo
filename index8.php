@@ -1,9 +1,11 @@
 <?php
 // index.php — Payments Entry with OR validation, usage marking, and activity logging
 include 'config.php';
+include 'auth.php';
+require_role(['cashier']);
 
 
-session_start();
+
 
 function sanitize($v) { return htmlspecialchars(trim($v)); }
 
@@ -264,7 +266,7 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
   </style>
 </head>
 <body>
-<?php include 'navbar.php'; ?>
+<?php include 'nvbar.php'; ?>
 
 <div class="container py-4">
   <?php if ($error): ?>

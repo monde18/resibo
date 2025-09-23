@@ -1,10 +1,8 @@
 <?php
 include 'config.php';
-include 'auth.php';
-require_role(['admin','cashier','encoder']);
 
 
-
+session_start();
 
 // Total payments
 $res = $conn->query("SELECT COUNT(*) as cnt, SUM(total) as sum FROM payments");
@@ -54,7 +52,7 @@ $recent = $conn->query("SELECT date,payee,reference_no,total FROM payments ORDER
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-light">
-     <?php include 'navbar.php'; ?> 
+     <?php include 'nvbar.php'; ?> 
 <div class="container mt-4">
   <h2 class="mb-4">📊 Payments Dashboard</h2>
 

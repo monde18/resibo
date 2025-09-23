@@ -1,6 +1,8 @@
 <?php
 // index.php — Payments Entry with OR validation, usage marking, and activity logging
 include 'config.php';
+include 'auth.php';
+require_role(['encoder']);
 
 
 session_start();
@@ -132,32 +134,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $total = number_format($total, 2, '.', '');
 
             // save payment
-            $sql = "
-                INSERT INTO payments
-                (`date`, payee, reference_no,
-                 code1, account_name1, amount1,
-                 code2, account_name2, amount2,
-                 code3, account_name3, amount3,
-                 code4, account_name4, amount4,
-                 code5, account_name5, amount5,
-                 code6, account_name6, amount6,
-                 code7, account_name7, amount7,
-                 code8, account_name8, amount8,
-                 total, cash_received, change_amount,
-                 archived, archive_reason, archived_date
-                ) VALUES (
-                 ?, ?, ?,
-                 ?, ?, ?,
-                 ?, ?, ?,
-                 ?, ?, ?,
-                 ?, ?, ?,
-                 ?, ?, ?,
-                 ?, ?, ?,
-                 ?, ?, ?,
-                 ?, ?, ?,
-                 ?, ?, ?, ?, ?, ?
-                )
-            ";
+$sql = "
+    INSERT INTO payments
+    (user_id, `date`, payee, reference_no,
+     code1, account_name1, amount1,
+     code2, account_name2, amount2,
+     code3, account_name3, amount3,
+     code4, account_name4, amount4,
+     code5, account_name5, amount5,
+     code6, account_name6, amount6,
+     code7, account_name7, amount7,
+     code8, account_name8, amount8,
+     total, cash_received, change_amount,
+     archived, archive_reason, archived_date
+    ) VALUES (
+     ?, ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?,
+     ?, ?, ?, ?, ?, ?
+    )
+";
+
 
             $stmt = $conn->prepare($sql);
             if (!$stmt) {
@@ -169,22 +172,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $archive_reason = NULL;
                 $archived_date = NULL;
 
-                $types = "ssi" . str_repeat("ssd", 8) . "dddiss";
+$types = "issi" . str_repeat("ssd", 8) . "dddiss";
 
-                $stmt->bind_param(
-                    $types,
-                    $date, $payee, $refno,
-                    $codesArr[0], $acctsArr[0], $amtsArr[0],
-                    $codesArr[1], $acctsArr[1], $amtsArr[1],
-                    $codesArr[2], $acctsArr[2], $amtsArr[2],
-                    $codesArr[3], $acctsArr[3], $amtsArr[3],
-                    $codesArr[4], $acctsArr[4], $amtsArr[4],
-                    $codesArr[5], $acctsArr[5], $amtsArr[5],
-                    $codesArr[6], $acctsArr[6], $amtsArr[6],
-                    $codesArr[7], $acctsArr[7], $amtsArr[7],
-                    $total, $cash_received, $change_amount,
-                    $archived, $archive_reason, $archived_date
-                );
+$stmt->bind_param(
+    $types,
+    $uid, $date, $payee, $refno,
+    $codesArr[0], $acctsArr[0], $amtsArr[0],
+    $codesArr[1], $acctsArr[1], $amtsArr[1],
+    $codesArr[2], $acctsArr[2], $amtsArr[2],
+    $codesArr[3], $acctsArr[3], $amtsArr[3],
+    $codesArr[4], $acctsArr[4], $amtsArr[4],
+    $codesArr[5], $acctsArr[5], $amtsArr[5],
+    $codesArr[6], $acctsArr[6], $amtsArr[6],
+    $codesArr[7], $acctsArr[7], $amtsArr[7],
+    $total, $cash_received, $change_amount,
+    $archived, $archive_reason, $archived_date
+);
+
 
                 if ($stmt->execute()) {
                     $last_id = $conn->insert_id;
@@ -264,7 +268,7 @@ if (isset($_GET['success']) && isset($_SESSION['saved_total'])) {
   </style>
 </head>
 <body>
-<?php include 'navbar.php'; ?>
+<?php include 'nvbar.php'; ?>
 
 <div class="container py-4">
   <?php if ($error): ?>
